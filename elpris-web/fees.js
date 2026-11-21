@@ -50,7 +50,7 @@
     },
   };
 
-  const DEFAULT_TOGGLES = { includeGrid: true, includeAddons: true };
+  const DEFAULT_TOGGLES = { includeGrid: false, includeAddons: true };
 
   function normalizeToggles(toggles = DEFAULT_TOGGLES) {
     return {
@@ -236,12 +236,10 @@
       const v = localStorage.getItem(GRID_STORAGE_KEY);
       if (v === '0' || v === 'false') return false;
       if (v === '1' || v === 'true') return true;
-      const legacy = readLegacyFeesFlag();
-      if (legacy !== null) return legacy;
     } catch {
       /* ignore */
     }
-    return true;
+    return DEFAULT_TOGGLES.includeGrid;
   }
 
   function loadIncludeAddonsPreference() {
