@@ -292,33 +292,73 @@ body {
   color: var(--muted);
 }
 
-.price-block__spot-ref {
-  margin: 0.2rem 0 0;
-  font-size: 0.78rem;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.price-block__spot-ref[hidden],
 .price-block__fees[hidden] {
   display: none;
 }
 
 .price-block__fees {
-  margin: 0.35rem 0 0;
-  padding: 0.45rem 0.5rem;
+  margin: 0.4rem 0 0;
+  padding: 0.5rem 0.55rem;
   font-size: 0.75rem;
-  line-height: 1.4;
+  line-height: 1.35;
   color: var(--fg);
   background: color-mix(in srgb, var(--forecast-bg) 85%, transparent);
   border-radius: 0.45rem;
   border: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
 }
 
-.price-block__fees strong {
+.fee-breakdown__title {
+  margin: 0 0 0.35rem;
+  font-size: 0.65rem;
   font-weight: 600;
-  color: var(--accent-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.fee-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.fee-breakdown__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.65rem;
+  padding: 0.28rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+}
+
+.fee-breakdown__row:last-child {
+  border-bottom: none;
+}
+
+.fee-breakdown__label {
+  flex: 1 1 auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.fee-breakdown__value {
+  flex: 0 0 auto;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.fee-breakdown__amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--fg);
+}
+
+.fee-breakdown__unit {
+  font-size: 0.62rem;
+  color: var(--muted);
 }
 
 .price-block__meta {
@@ -660,13 +700,15 @@ body {
 
 .forecast-row__fees {
   grid-column: 1 / -1;
-  font-size: 0.72rem;
-  color: var(--fg);
-  padding: 0.35rem 0.45rem;
+  margin: 0.15rem 0 0.1rem;
+  padding: 0.4rem 0.45rem;
   border-radius: 0.4rem;
   background: color-mix(in srgb, var(--forecast-bg) 75%, transparent);
   border: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
+}
+
+.forecast-row__fees .fee-breakdown__title {
+  margin-bottom: 0.25rem;
 }
 
 .forecast-row__range {

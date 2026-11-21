@@ -72,14 +72,26 @@
   }
 
   function feeAddonDetailLine(spotOreEx, zone, profileId = 'lagenhet') {
+    const lines = feeBreakdownLines(spotOreEx, zone, profileId).filter((l) => !l.exMoms);
+    return lines.map((l) => `${l.label.toLowerCase()} ${l.value}`).join(', ');
+  }
+
+  /**
+   * @returns {Array<{label:string,value:number,exMoms:boolean}>}
+   */
+  function feeBreakdownLines(spotOreEx, zone, profileId = 'lagenhet') {
+    const spot = spotOnlyOre(spotOreEx);
     const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
     const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
-    const gridInkl = Math.round(gridEx * VAT);
-    const taxInkl = Math.round(taxEx * VAT);
-    const certHandInkl = Math.round((CERTIFICATE_ORE_EX + RETAIL_VARIABLE_ORE_EX) * VAT);
-    const momsEl = Math.round(spotOnlyOre(spotOreEx) * (VAT - 1));
-    return `+ elnät ${gridInkl}, skatt ${taxInkl}, cert/hand ${certHandInkl}, moms ${momsEl} öre/kWh`;
+    return [
+      { label: 'Spot', value: spot, exMoms: true },
+      { label: 'Elnät (variabel)', value: Math.round(gridEx * VAT), exMoms: false },
+      { label: 'Energiskatt', value: Math.round(taxEx * VAT), exMoms: false },
+      { label: 'Elcertifikat', value: Math.round(CERTIFICATE_ORE_EX * VAT), exMoms: false },
+      { label: 'Handel (rörligt)', value: Math.round(RETAIL_VARIABLE_ORE_EX * VAT), exMoms: false },
+      { label: 'Moms på el (spot)', value: Math.round(spot * (VAT - 1)), exMoms: false },
+    ];
   }
 
   function feeBreakdownHint(zone, profileId = 'lagenhet') {
@@ -136,6 +148,7 @@
     spotOnlyOre,
     feeAddonOre,
     feeAddonDetailLine,
+    feeBreakdownLines,
     feeBreakdownHint,
     loadIncludeFeesPreference,
     saveIncludeFeesPreference,
