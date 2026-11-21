@@ -278,7 +278,7 @@
   }
 
   function feePivotAmountCell(line) {
-    const hint = line.exMoms ? 'ex' : 'inkl';
+    const hint = line.kind === 'vat' ? 'moms' : line.exMoms ? 'ex' : 'inkl';
     return `<td class="fee-pivot__amount"><span class="fee-pivot__value">${line.value.toLocaleString('sv-SE')}</span><span class="fee-pivot__hint"> öre ${hint}</span></td>`;
   }
 
@@ -289,10 +289,11 @@
       netProfileId,
     );
     const feeRows = feeLines
-      .map(
-        (line) =>
-          `<tr class="fee-pivot__row fee-pivot__row--fee"><th scope="row">${line.label}</th>${feePivotAmountCell(line)}</tr>`,
-      )
+      .map((line) => {
+        const kindClass =
+          line.kind === 'vat' ? 'fee-pivot__row--vat' : 'fee-pivot__row--fee';
+        return `<tr class="fee-pivot__row ${kindClass}"><th scope="row">${line.label}</th>${feePivotAmountCell(line)}</tr>`;
+      })
       .join('');
     return `
       <table class="fee-pivot">
@@ -313,7 +314,7 @@
         </tbody>
         <tfoot>
           <tr class="fee-pivot__row fee-pivot__row--total">
-            <th scope="row">Summa totalt</th>
+            <th scope="row">Summa totalt inkl. moms</th>
             <td class="fee-pivot__amount"><span class="fee-pivot__value">${total.toLocaleString('sv-SE')}</span><span class="fee-pivot__hint"> öre inkl</span></td>
           </tr>
         </tfoot>
