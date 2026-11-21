@@ -6,6 +6,7 @@
   const DAY_LABELS = { yesterday: 'Igår', today: 'Idag', tomorrow: 'Imorgon' };
   const PX_PER_DAY = 88;
   const BASE_W = 360;
+  const SEGMENT_GAP_MS = 3 * 3600000;
 
   const LEVEL_RGB = {
     cheap: [52, 211, 153],
@@ -48,7 +49,6 @@
 
   function colorForValue(y, stats) {
     const { min, max, mean } = stats;
-    const span = Math.max(max - min, 1);
     if (y <= mean) {
       const t = (y - min) / Math.max(mean - min, 1);
       const rgb = mixRgb(LEVEL_RGB.cheap, LEVEL_RGB.mid, t);
@@ -59,30 +59,48 @@
     return `rgb(${rgb.join(',')})`;
   }
 
+  function splitRuns(points) {
+    if (!points.length) return [];
+    const runs = [];
+    let run = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+      const gap = points[i].t - points[i - 1].t;
+      if (gap > SEGMENT_GAP_MS) {
+        runs.push(run);
+        run = [];
+      }
+      run.push(points[i]);
+    }
+    runs.push(run);
+    return runs;
+  }
+
   function destroy(container) {
     if (!container) return;
     container.replaceChildren();
     container.classList.remove('price-chart--has-data');
   }
 
-  function appendMarkers(g, points, xScale, yScale, stats, dashed) {
+  function appendMarkers(g, points, xScale, yScale, stats, dashed, radius) {
+    const r = radius || 3.5;
     for (const p of points) {
       const color = colorForValue(p.y, stats);
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
       dot.setAttribute('cx', String(xScale(p.t)));
       dot.setAttribute('cy', String(yScale(p.y)));
-      dot.setAttribute('r', '3.5');
+      dot.setAttribute('r', String(r));
       dot.setAttribute('fill', color);
-      dot.setAttribute('stroke', 'var(--bg)');
-      dot.setAttribute('stroke-width', '1');
-      if (dashed) dot.setAttribute('class', 'price-chart__dot price-chart__dot--forecast');
-      else dot.setAttribute('class', 'price-chart__dot price-chart__dot--spot');
+      dot.setAttribute('stroke', dashed ? 'var(--chart-forecast)' : 'var(--bg)');
+      dot.setAttribute('stroke-width', dashed ? '1.5' : '1');
+      dot.setAttribute('class', dashed
+        ? 'price-chart__dot price-chart__dot--forecast'
+        : 'price-chart__dot price-chart__dot--spot');
       g.append(dot);
     }
   }
 
-  function appendSegments(g, points, xScale, yScale, yBot, stats, dash) {
-    if (points.length < 2) return;
+  function appendSegments(g, points, xScale, yScale, yBot, stats, dash, strokeWidth) {
+    const sw = strokeWidth || (dash ? 3 : 2.25);
     for (let i = 0; i < points.length - 1; i++) {
       const a = points[i];
       const b = points[i + 1];
@@ -110,16 +128,63 @@
       line.setAttribute('x2', String(x2));
       line.setAttribute('y2', String(yb));
       line.setAttribute('stroke', color);
-      line.setAttribute('stroke-width', '2.25');
+      line.setAttribute('stroke-width', String(sw));
       line.setAttribute('stroke-linecap', 'round');
       if (dash) line.setAttribute('stroke-dasharray', dash);
+      line.setAttribute('class', dash ? 'price-chart__segment-line--forecast' : 'price-chart__segment-line--spot');
       g.append(line);
     }
   }
 
+  function appendSeries(g, points, xScale, yScale, yBot, stats, dash, strokeWidth) {
+    const runs = splitRuns(points);
+    for (const run of runs) {
+      if (run.length >= 2) {
+        appendSegments(g, run, xScale, yScale, yBot, stats, dash, strokeWidth);
+      } else if (run.length === 1) {
+        appendMarkers(g, run, xScale, yScale, stats, !!dash, dash ? 4.5 : 4);
+      }
+    }
+  }
+
+  function appendBoundaryMarkers(g, points, xScale, yScale, stats) {
+    const byDay = new Map();
+    for (const p of points) {
+      const key = p.day || '';
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key).push(p);
+    }
+    const mids = [];
+    for (const pts of byDay.values()) {
+      pts.sort((a, b) => a.t - b.t);
+      mids.push(pts[Math.floor(pts.length / 2)]);
+    }
+    appendMarkers(g, mids, xScale, yScale, stats, true, 4);
+  }
+
+  function scrollToPrognos(container, prognosScrollT, xScale, viewWidth) {
+    const scrollEl = container.querySelector('.price-chart__scroll');
+    const hint = container.querySelector('.price-chart__scroll-hint');
+    if (!scrollEl) return;
+
+    const apply = () => {
+      const overflow = scrollEl.scrollWidth > scrollEl.clientWidth + 4;
+      if (hint) hint.hidden = !overflow;
+      if (!overflow) {
+        scrollEl.scrollLeft = 0;
+        return;
+      }
+      if (prognosScrollT == null) return;
+      const frac = xScale(prognosScrollT) / viewWidth;
+      const target = frac * scrollEl.scrollWidth - scrollEl.clientWidth * 0.25;
+      scrollEl.scrollLeft = Math.max(0, Math.min(target, scrollEl.scrollWidth - scrollEl.clientWidth));
+    };
+
+    requestAnimationFrame(() => requestAnimationFrame(apply));
+  }
+
   /**
    * @param {HTMLElement} container
-   * @param {{ spot: Array<{t:number,y:number}>, forecast: Array<{t:number,y:number}>, tMin: number, tMax: number, unitLabel: string, dayBounds: Array }} data
    */
   function render(container, data) {
     destroy(container);
@@ -169,7 +234,7 @@
     svg.setAttribute('role', 'img');
     svg.setAttribute(
       'aria-label',
-      `Diagram över elpris med färgskala billigt till dyrt. Spot auktionerat och prognos modell. Medel ${Math.round(stats.mean)} öre.`,
+      `Diagram över elpris med färgskala. Spot och prognos. Medel ${Math.round(stats.mean)} öre.`,
     );
 
     const gGrid = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -222,6 +287,18 @@
     }
     svg.append(gDays);
 
+    const dividerT = data.prognosScrollT;
+    if (dividerT != null) {
+      const dx = xScale(dividerT);
+      const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      divider.setAttribute('x1', String(dx));
+      divider.setAttribute('x2', String(dx));
+      divider.setAttribute('y1', String(pad.t));
+      divider.setAttribute('y2', String(H - pad.b));
+      divider.setAttribute('class', 'price-chart__prognos-divider');
+      svg.append(divider);
+    }
+
     const meanY = yScale(stats.mean);
     const meanLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     meanLine.setAttribute('x1', String(pad.l));
@@ -232,24 +309,28 @@
     svg.append(meanLine);
 
     const isDaily = data.mode === 'daily';
-    const segmentOpacity = isDaily ? '0.35' : '0.2';
+    const segmentOpacity = isDaily ? '0.35' : '0.22';
 
     const gSpot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gSpot.setAttribute('class', 'price-chart__series price-chart__series--spot');
-    appendSegments(gSpot, spot, xScale, yScale, yBot, stats, null);
+    appendSeries(gSpot, spot, xScale, yScale, yBot, stats, null, 2.25);
     gSpot.querySelectorAll('.price-chart__segment-area').forEach((node) => {
       node.setAttribute('fill-opacity', segmentOpacity);
     });
-    if (isDaily) appendMarkers(gSpot, spot, xScale, yScale, stats, false);
+    if (isDaily) appendMarkers(gSpot, spot, xScale, yScale, stats, false, 4);
     svg.append(gSpot);
 
     const gFc = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gFc.setAttribute('class', 'price-chart__series price-chart__series--forecast');
-    appendSegments(gFc, forecast, xScale, yScale, yBot, stats, '5 4');
+    appendSeries(gFc, forecast, xScale, yScale, yBot, stats, '6 4', 3);
     gFc.querySelectorAll('.price-chart__segment-area').forEach((node) => {
       node.setAttribute('fill-opacity', segmentOpacity);
     });
-    if (isDaily) appendMarkers(gFc, forecast, xScale, yScale, stats, true);
+    if (isDaily) {
+      appendMarkers(gFc, forecast, xScale, yScale, stats, true, 4.5);
+    } else if (forecast.length) {
+      appendBoundaryMarkers(gFc, forecast, xScale, yScale, stats);
+    }
     svg.append(gFc);
 
     const gX = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -272,10 +353,22 @@
     }
     svg.append(gX);
 
+    const scrollHint = document.createElement('p');
+    scrollHint.className = 'price-chart__scroll-hint';
+    scrollHint.hidden = true;
+    scrollHint.textContent = 'Svep åt höger för mer prognos →';
+
+    const scroll = document.createElement('div');
+    scroll.className = 'price-chart__scroll';
+    scroll.setAttribute('tabindex', '0');
+    scroll.setAttribute('role', 'region');
+    scroll.setAttribute('aria-label', 'Tidslinje med spot och prognos');
+    scroll.append(svg);
+
+    const prognosDays = Math.max(0, dayBounds.filter((b) => b.isForecast).length);
     const typeLegend = document.createElement('div');
     typeLegend.className = 'price-chart__legend price-chart__legend--type';
     typeLegend.setAttribute('role', 'list');
-    const prognosDays = Math.max(0, dayBounds.filter((b) => b.isForecast).length);
     typeLegend.innerHTML = `
       <span class="price-chart__legend-item" role="listitem">
         <span class="price-chart__swatch price-chart__swatch--spot" aria-hidden="true"></span>
@@ -283,17 +376,12 @@
       </span>
       <span class="price-chart__legend-item" role="listitem">
         <span class="price-chart__swatch price-chart__swatch--forecast" aria-hidden="true"></span>
-        Prognos (modell) · imorgon vid behov + ${prognosDays} dagar
+        Prognos (modell) · ${forecast.length ? 'synlig' : '—'} · ${prognosDays} dagar
       </span>
     `;
 
     const scaleLegend = document.createElement('div');
     scaleLegend.className = 'price-chart__scale';
-    scaleLegend.setAttribute('role', 'img');
-    scaleLegend.setAttribute(
-      'aria-label',
-      `Färgskala för synlig period. Lägst ${Math.round(stats.min)}, medel ${Math.round(stats.mean)}, högst ${Math.round(stats.max)} öre.`,
-    );
     const cheap = Math.round(stats.min);
     const mean = Math.round(stats.mean);
     const hot = Math.round(stats.max);
@@ -305,22 +393,15 @@
         <span>Medel<br><strong>${mean}</strong></span>
         <span>Dyrt<br><strong>${hot}</strong></span>
       </div>
-      <p class="price-chart__scale-note">Färg relativt min–medel–max i hela diagrammet · streckad linje = prognos</p>
+      <p class="price-chart__scale-note">Färg relativt min–medel–max · streckad = prognos</p>
     `;
-
-    const scroll = document.createElement('div');
-    scroll.className = 'price-chart__scroll';
-    scroll.setAttribute('tabindex', '0');
-    scroll.setAttribute('role', 'region');
-    scroll.setAttribute('aria-label', 'Tidslinje: svep vågrätt för fler dagar');
-    scroll.append(svg);
 
     container.classList.add('price-chart--has-data');
     container.classList.toggle('price-chart--wide', W > BASE_W);
-    container.dataset.scaleMin = String(cheap);
-    container.dataset.scaleMean = String(mean);
-    container.dataset.scaleMax = String(hot);
-    container.append(scroll, scaleLegend, typeLegend);
+    container.dataset.forecastPoints = String(forecast.length);
+    container.append(scrollHint, scroll, scaleLegend, typeLegend);
+
+    scrollToPrognos(container, data.prognosScrollT, xScale, W);
   }
 
   global.ElprisChart = { render, destroy, colorForValue, priceStats };
