@@ -1,5 +1,6 @@
 (function () {
   const fees = typeof window !== 'undefined' ? window.ElprisFees : null;
+  const chart = typeof window !== 'undefined' ? window.ElprisChart : null;
 
   const SPOT_API = 'https://www.elprisetjustnu.se/api/v1/prices';
   const FORECAST_API = 'https://elfacit.se/api/elpris-prognos';
@@ -7,6 +8,7 @@
   const DEFAULT_ZONE = 'SE3';
   const FORECAST_DAYS = 5;
   const TZ = 'Europe/Stockholm';
+  const DAY_MS = 24 * 60 * 60 * 1000;
 
   const ZONE_NAMES = {
     SE1: 'Luleå / Norra Sverige',
@@ -107,7 +109,30 @@
     return nums.reduce((a, b) => a + b, 0) / nums.length;
   }
 
-  async function fetchSpotDayAverage(zone, isoKey) {
+  function stockholmMidnightMs(isoKey) {
+    const [y, m, d] = isoKey.split('-').map(Number);
+    let guess = Date.UTC(y, m - 1, d - 1, 22, 0, 0);
+    for (let i = 0; i < 96; i++) {
+      const parts = new Intl.DateTimeFormat('sv-SE', {
+        timeZone: TZ,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).formatToParts(new Date(guess));
+      const get = (type) => parts.find((p) => p.type === type)?.value;
+      const key = `${get('year')}-${get('month')}-${get('day')}`;
+      if (key === isoKey && get('hour') === '00' && get('minute') === '00') {
+        return guess;
+      }
+      guess += 15 * 60 * 1000;
+    }
+    return guess;
+  }
+
+  async function fetchSpotDay(zone, isoKey) {
     const year = isoKey.slice(0, 4);
     const monthDay = isoKey.slice(5);
     const url = `${SPOT_API}/${year}/${monthDay}_${zone}.json`;
@@ -118,13 +143,20 @@
     const rows = await res.json();
     if (!Array.isArray(rows) || rows.length === 0) return null;
 
-    const sum = rows.reduce((acc, row) => acc + Number(row.SEK_per_kWh), 0);
-    const avgKr = sum / rows.length;
+    const series = rows.map((row) => ({
+      t: new Date(row.time_start).getTime(),
+      kr: Number(row.SEK_per_kWh),
+      oreEx: krPerKwhToOre(Number(row.SEK_per_kWh)),
+    }));
+
+    const sum = series.reduce((acc, p) => acc + p.kr, 0);
+    const avgKr = sum / series.length;
     return {
       avgKr,
       avgOre: krPerKwhToOre(avgKr),
-      intervals: rows.length,
+      intervals: series.length,
       kind: 'spot',
+      series,
     };
   }
 
@@ -138,13 +170,19 @@
     if (!Array.isArray(hourly)) throw new Error('Ogiltigt prognossvar.');
 
     const byDay = new Map();
+    const hourlySeries = [];
     for (const row of hourly) {
-      const iso = stockholmDateParts(new Date(row.start)).iso;
+      const start = new Date(row.start);
+      const iso = stockholmDateParts(start).iso;
       if (!byDay.has(iso)) byDay.set(iso, { p10: [], p50: [], p90: [] });
       const bucket = byDay.get(iso);
-      bucket.p10.push(Number(row.p10));
-      bucket.p50.push(Number(row.p50));
-      bucket.p90.push(Number(row.p90));
+      const p10 = Number(row.p10);
+      const p50 = Number(row.p50);
+      const p90 = Number(row.p90);
+      bucket.p10.push(p10);
+      bucket.p50.push(p50);
+      bucket.p90.push(p90);
+      hourlySeries.push({ t: start.getTime(), iso, p10, p50, p90, kind: 'forecast' });
     }
 
     const daily = new Map();
@@ -157,7 +195,7 @@
       });
     }
 
-    return { daily, issued: body.utfardad, model: body.modell };
+    return { daily, hourly: hourlySeries, issued: body.utfardad, model: body.modell };
   }
 
   const els = {
@@ -180,6 +218,8 @@
     netProfileSelect: el('net-profile'),
     feeHint: el('fee-hint'),
     priceUnits: document.querySelectorAll('.price-unit'),
+    priceChart: el('price-chart'),
+    chartSub: el('chart-sub'),
   };
 
   let loading = false;
@@ -257,7 +297,85 @@
     renderToday(todaySpot);
     renderTomorrow(tomorrowSpot, tomorrowIso, forecastDaily);
     renderForecast(forecastDaily, cachedView.todayIso, forecast);
+    renderPriceChart(cachedView);
     updatePriceModeUi();
+  }
+
+  function appendSpotSeries(target, dayKey, dayData) {
+    if (!dayData?.series?.length) return;
+    for (const point of dayData.series) {
+      target.push({
+        t: point.t,
+        y: displayOre(point.oreEx),
+        day: dayKey,
+      });
+    }
+  }
+
+  function renderPriceChart(view) {
+    if (!chart || !els.priceChart || !view) return;
+
+    const {
+      yesterdaySpot,
+      todaySpot,
+      tomorrowSpot,
+      todayIso,
+      tomorrowIso,
+      yesterdayIso,
+      forecast,
+    } = view;
+
+    const spot = [];
+    appendSpotSeries(spot, 'yesterday', yesterdaySpot);
+    appendSpotSeries(spot, 'today', todaySpot);
+    appendSpotSeries(spot, 'tomorrow', tomorrowSpot);
+
+    const forecastPts = [];
+    if (!tomorrowSpot?.series?.length && forecast?.hourly) {
+      for (const row of forecast.hourly) {
+        if (row.iso !== tomorrowIso) continue;
+        forecastPts.push({
+          t: row.t,
+          y: displayOre(row.p50),
+          day: 'tomorrow',
+        });
+      }
+    }
+
+    if (!spot.length && !forecastPts.length) {
+      chart.destroy(els.priceChart);
+      const empty = document.createElement('p');
+      empty.className = 'price-chart__empty';
+      empty.textContent = 'Kunde inte hämta tidsserie för diagrammet.';
+      els.priceChart.append(empty);
+      return;
+    }
+
+    const dayBounds = [
+      { key: 'yesterday', t0: stockholmMidnightMs(yesterdayIso), t1: stockholmMidnightMs(yesterdayIso) + DAY_MS },
+      { key: 'today', t0: stockholmMidnightMs(todayIso), t1: stockholmMidnightMs(todayIso) + DAY_MS },
+      { key: 'tomorrow', t0: stockholmMidnightMs(tomorrowIso), t1: stockholmMidnightMs(tomorrowIso) + DAY_MS },
+    ];
+
+    chart.render(els.priceChart, {
+      spot,
+      forecast: forecastPts,
+      tMin: dayBounds[0].t0,
+      tMax: dayBounds[2].t1,
+      dayBounds,
+      unitLabel: includeFees ? 'öre per kilowattimme inklusive' : 'öre per kilowattimme spot',
+    });
+
+    if (els.chartSub) {
+      const parts = [];
+      parts.push(yesterdaySpot ? 'igår spot' : 'igår ej tillgänglig');
+      parts.push('idag spot');
+      if (tomorrowSpot) parts.push('imorgon spot');
+      else if (forecastPts.length) parts.push('imorgon prognos');
+      else parts.push('imorgon väntar på spot');
+      parts.push(includeFees ? 'värden inkl. avgifter' : 'rena spotvärden');
+      els.chartSub.textContent = parts.join(' · ');
+    }
   }
 
   function renderToday(data) {
@@ -387,21 +505,26 @@
     if (els.tomorrowNumber) els.tomorrowNumber.textContent = '…';
     setAppStatus(`Hämtar priser för ${zone} …`, 'loading');
     els.forecastList?.replaceChildren();
+    chart?.destroy(els.priceChart);
 
     const todayIso = stockholmDateParts().iso;
     const tomorrowIso = isoKeyOffsetDays(todayIso, 1);
+    const yesterdayIso = isoKeyOffsetDays(todayIso, -1);
 
     try {
-      const [todaySpot, tomorrowSpot, forecast] = await Promise.all([
-        fetchSpotDayAverage(zone, todayIso),
-        fetchSpotDayAverage(zone, tomorrowIso),
+      const [todaySpot, tomorrowSpot, yesterdaySpot, forecast] = await Promise.all([
+        fetchSpotDay(zone, todayIso),
+        fetchSpotDay(zone, tomorrowIso),
+        fetchSpotDay(zone, yesterdayIso),
         fetchForecastDailyMap(zone),
       ]);
 
       cachedView = {
         todaySpot,
         tomorrowSpot,
+        yesterdaySpot,
         tomorrowIso,
+        yesterdayIso,
         todayIso,
         forecastDaily: forecast.daily,
         forecast,
@@ -410,6 +533,7 @@
       renderToday(todaySpot);
       renderTomorrow(tomorrowSpot, tomorrowIso, forecast.daily);
       renderForecast(forecast.daily, todayIso, forecast);
+      renderPriceChart(cachedView);
       if (els.updatedAt) els.updatedAt.textContent = `Uppdaterad ${formatUpdatedAt()}`;
       setAppStatus('', null);
       initialLoadDone = true;
