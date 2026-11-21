@@ -70,6 +70,16 @@
         </article>
       </section>
 
+      <section class="price-chart-section" aria-labelledby="chart-heading">
+        <div class="price-chart-section__head">
+          <h2 id="chart-heading" class="price-chart-section__title">Pris över dygnet</h2>
+          <p class="price-chart-section__sub" id="chart-sub">
+            Igår, idag och imorgon · kvartspris spot där det finns
+          </p>
+        </div>
+        <div id="price-chart" class="price-chart" aria-live="polite"></div>
+      </section>
+
       <section class="forecast" aria-labelledby="forecast-heading">
         <div class="forecast__head">
           <h2 class="forecast__title" id="forecast-heading">Prognos</h2>
@@ -105,6 +115,7 @@
       </footer>
     </main>
     <script src="fees.js"></script>
+    <script src="chart.js"></script>
     <script src="app.js" defer></script>
   </body>
 </html>
