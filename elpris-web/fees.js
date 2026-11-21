@@ -61,6 +61,27 @@
     return consumerTotalOre(pOreEx, zone, profileId);
   }
 
+  function spotOnlyOre(spotOreEx) {
+    return Math.round(Number(spotOreEx));
+  }
+
+  /** Tillägg inkl. moms ovanpå spot öre ex moms (variabla avgifter + moms). */
+  function feeAddonOre(spotOreEx, zone, profileId = 'lagenhet') {
+    const spot = spotOnlyOre(spotOreEx);
+    return consumerTotalOre(spotOreEx, zone, profileId) - spot;
+  }
+
+  function feeAddonDetailLine(spotOreEx, zone, profileId = 'lagenhet') {
+    const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
+    const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
+    const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
+    const gridInkl = Math.round(gridEx * VAT);
+    const taxInkl = Math.round(taxEx * VAT);
+    const certHandInkl = Math.round((CERTIFICATE_ORE_EX + RETAIL_VARIABLE_ORE_EX) * VAT);
+    const momsEl = Math.round(spotOnlyOre(spotOreEx) * (VAT - 1));
+    return `+ elnät ${gridInkl}, skatt ${taxInkl}, cert/hand ${certHandInkl}, moms ${momsEl} öre/kWh`;
+  }
+
   function feeBreakdownHint(zone, profileId = 'lagenhet') {
     const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
     const grid = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
@@ -112,6 +133,9 @@
   global.ElprisFees = {
     consumerTotalOre,
     consumerTotalFromForecastBand,
+    spotOnlyOre,
+    feeAddonOre,
+    feeAddonDetailLine,
     feeBreakdownHint,
     loadIncludeFeesPreference,
     saveIncludeFeesPreference,

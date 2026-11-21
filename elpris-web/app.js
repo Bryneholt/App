@@ -44,6 +44,9 @@
   const {
     consumerTotalOre,
     consumerTotalFromForecastBand,
+    spotOnlyOre,
+    feeAddonOre,
+    feeAddonDetailLine,
     feeBreakdownHint,
     loadIncludeFeesPreference,
     saveIncludeFeesPreference,
@@ -203,9 +206,13 @@
     zoneLabel: el('zone-label'),
     zoneSub: el('zone-sub'),
     todayNumber: el('today-number'),
+    todaySpotRef: el('today-spot-ref'),
+    todayFees: el('today-fees'),
     todayMeta: el('today-meta'),
     todayBlock: document.querySelector('.price-block--today'),
     tomorrowNumber: el('tomorrow-number'),
+    tomorrowSpotRef: el('tomorrow-spot-ref'),
+    tomorrowFees: el('tomorrow-fees'),
     tomorrowMeta: el('tomorrow-meta'),
     tomorrowBadge: el('tomorrow-badge'),
     tomorrowBlock: document.querySelector('.price-block--tomorrow'),
@@ -269,6 +276,39 @@
     return consumerTotalOre(spotOreEx, activeZone, netProfileId);
   }
 
+  function applyFeeRows(spotOreEx, spotRefEl, feesEl) {
+    if (!spotRefEl && !feesEl) return;
+    if (!includeFees || spotOreEx == null || Number.isNaN(Number(spotOreEx))) {
+      if (spotRefEl) {
+        spotRefEl.hidden = true;
+        spotRefEl.textContent = '';
+      }
+      if (feesEl) {
+        feesEl.hidden = true;
+        feesEl.textContent = '';
+      }
+      return;
+    }
+    const spot = spotOnlyOre(spotOreEx);
+    const addon = feeAddonOre(spotOreEx, activeZone, netProfileId);
+    const detail = feeAddonDetailLine(spotOreEx, activeZone, netProfileId);
+    if (spotRefEl) {
+      spotRefEl.hidden = false;
+      spotRefEl.textContent = `Spot ${spot.toLocaleString('sv-SE')} öre ex moms`;
+    }
+    if (feesEl) {
+      feesEl.hidden = false;
+      feesEl.innerHTML = `<strong>Avgifter</strong> +${addon.toLocaleString('sv-SE')} öre inkl. moms · <span class="price-block__fees-detail">${detail}</span>`;
+    }
+  }
+
+  function forecastFeesLine(spotOreEx) {
+    if (!includeFees || spotOreEx == null) return '';
+    const addon = feeAddonOre(spotOreEx, activeZone, netProfileId);
+    const detail = feeAddonDetailLine(spotOreEx, activeZone, netProfileId);
+    return `Spot ${spotOnlyOre(spotOreEx).toLocaleString('sv-SE')} öre ex moms · <strong>Avgifter</strong> +${addon.toLocaleString('sv-SE')} öre inkl. moms · ${detail}`;
+  }
+
   function displayForecastBand(p10, p90) {
     if (!includeFees) return { p10, p90 };
     return {
@@ -278,7 +318,7 @@
   }
 
   function updatePriceModeUi() {
-    const unitLabel = includeFees ? 'öre/kWh inkl.' : 'öre/kWh spot';
+    const unitLabel = includeFees ? 'öre/kWh inkl. moms' : 'öre/kWh spot';
     els.priceUnits?.forEach((node) => {
       node.textContent = unitLabel;
     });
@@ -494,7 +534,7 @@
       } else {
         parts.push('ingen prognosdata i diagrammet');
       }
-      parts.push(includeFees ? 'värden inkl. avgifter' : 'rena spotvärden');
+      parts.push(includeFees ? 'totalt inkl. moms i diagram' : 'rena spotvärden');
       els.chartSub.textContent = parts.join(' · ');
     }
     updateChartModeUi();
@@ -504,16 +544,19 @@
     if (!els.todayNumber) return;
     if (!data) {
       els.todayNumber.textContent = '—';
+      applyFeeRows(null, els.todaySpotRef, els.todayFees);
       if (els.todayMeta) els.todayMeta.textContent = 'Kunde inte hämta dagens spot.';
       els.todayBlock?.classList.add('is-error');
       return;
     }
     els.todayBlock?.classList.remove('is-error');
-    const shown = displayOre(data.avgOre);
-    els.todayNumber.textContent = shown.toLocaleString('sv-SE');
+    els.todayNumber.textContent = displayOre(data.avgOre).toLocaleString('sv-SE');
+    applyFeeRows(data.avgOre, els.todaySpotRef, els.todayFees);
     const krMwh = (data.avgKr * 1000).toLocaleString('sv-SE', { maximumFractionDigits: 0 });
-    const spotNote = includeFees ? `spot ${data.avgOre} öre` : `${krMwh} kr/MWh`;
-    if (els.todayMeta) els.todayMeta.textContent = `Medel · ${data.intervals} intervall · ${spotNote}`;
+    const extra = includeFees ? '' : ` · ${krMwh} kr/MWh`;
+    if (els.todayMeta) {
+      els.todayMeta.textContent = `Medel · ${data.intervals} intervall${extra}`;
+    }
   }
 
   function renderTomorrow(data, tomorrowIso, forecastDaily) {
@@ -526,11 +569,12 @@
         els.tomorrowBadge.className = 'badge badge--spot';
       }
       els.tomorrowNumber.textContent = displayOre(data.avgOre).toLocaleString('sv-SE');
+      applyFeeRows(data.avgOre, els.tomorrowSpotRef, els.tomorrowFees);
       const suffix = includeFees
-        ? `spot ${data.avgOre} öre`
+        ? ''
         : `${(data.avgKr * 1000).toLocaleString('sv-SE', { maximumFractionDigits: 0 })} kr/MWh`;
       if (els.tomorrowMeta) {
-        els.tomorrowMeta.textContent = `${shortDayLabel(tomorrowIso)} · ${suffix}`;
+        els.tomorrowMeta.textContent = [shortDayLabel(tomorrowIso), suffix].filter(Boolean).join(' · ');
       }
       return;
     }
@@ -541,10 +585,10 @@
         els.tomorrowBadge.textContent = 'Prognos';
         els.tomorrowBadge.className = 'badge badge--forecast';
       }
-      const shown = displayOre(fc.avgOre);
       const band = displayForecastBand(fc.p10, fc.p90);
-      els.tomorrowNumber.textContent = shown.toLocaleString('sv-SE');
-      const rangeLabel = includeFees ? 'intervall' : 'p10–p90';
+      els.tomorrowNumber.textContent = displayOre(fc.avgOre).toLocaleString('sv-SE');
+      applyFeeRows(fc.avgOre, els.tomorrowSpotRef, els.tomorrowFees);
+      const rangeLabel = includeFees ? 'intervall inkl. moms' : 'p10–p90';
       if (els.tomorrowMeta) {
         els.tomorrowMeta.textContent = `${shortDayLabel(tomorrowIso)} · ${band.p10}–${band.p90} öre (${rangeLabel}) · publiceras ~13`;
       }
@@ -556,6 +600,7 @@
       els.tomorrowBadge.className = 'badge';
     }
     els.tomorrowNumber.textContent = '—';
+    applyFeeRows(null, els.tomorrowSpotRef, els.tomorrowFees);
     if (els.tomorrowMeta) {
       els.tomorrowMeta.textContent = 'Morgondagens spot publiceras cirka kl. 13.';
     }
@@ -581,18 +626,26 @@
       const displayVal = fc ? displayOre(fc.avgOre) : null;
       val.textContent = displayVal != null ? `${displayVal.toLocaleString('sv-SE')} öre` : '—';
 
+      const fees = document.createElement('span');
+      fees.className = 'forecast-row__fees';
+      if (fc && includeFees) {
+        fees.innerHTML = forecastFeesLine(fc.avgOre);
+      } else {
+        fees.hidden = true;
+      }
+
       const range = document.createElement('span');
       range.className = 'forecast-row__range';
       if (fc) {
         const band = displayForecastBand(fc.p10, fc.p90);
         range.textContent = includeFees
-          ? `Prognosintervall ${band.p10}–${band.p90} öre/kWh (modell + avgifter)`
+          ? `Prognosintervall ${band.p10}–${band.p90} öre/kWh inkl. moms`
           : `Osäkerhetsintervall ${fc.p10}–${fc.p90} öre/kWh spot (utan moms)`;
       } else {
         range.textContent = 'Ingen prognos för denna dag.';
       }
 
-      li.append(day, val, range);
+      li.append(day, val, fees, range);
       els.forecastList.append(li);
     }
 
@@ -608,8 +661,10 @@
     const msg = err?.message || 'Kunde inte hämta elprisdata.';
     setAppStatus(msg, 'error');
     if (els.todayNumber) els.todayNumber.textContent = '—';
+    applyFeeRows(null, els.todaySpotRef, els.todayFees);
     if (els.todayMeta) els.todayMeta.textContent = msg;
     if (els.tomorrowNumber) els.tomorrowNumber.textContent = '—';
+    applyFeeRows(null, els.tomorrowSpotRef, els.tomorrowFees);
     if (els.tomorrowMeta) els.tomorrowMeta.textContent = '';
     if (els.forecastNote) els.forecastNote.textContent = msg;
     els.todayBlock?.classList.add('is-error');
