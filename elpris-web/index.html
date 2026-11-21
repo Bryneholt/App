@@ -9,6 +9,14 @@
   </head>
   <body>
     <main class="page" id="main">
+      <div
+        id="app-status"
+        class="app-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></div>
+
       <header class="header">
         <p class="eyebrow">Spotpris &amp; prognos</p>
         <h1 class="zone-label" id="zone-label">—</h1>
@@ -96,6 +104,7 @@
         </p>
       </footer>
     </main>
-    <script src="app.js" type="module"></script>
+    <script src="fees.js"></script>
+    <script src="app.js" defer></script>
   </body>
 </html>
