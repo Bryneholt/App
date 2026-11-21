@@ -464,12 +464,17 @@
       return;
     }
 
+    const firstPrognosBand =
+      dayBounds.find((b) => b.isForecast) ||
+      (!tomorrowSpot?.series?.length ? dayBounds.find((b) => b.key === 'tomorrow') : null);
+
     chart.render(els.priceChart, {
       spot,
       forecast: forecastPts,
       tMin: dayBounds[0].t0,
       tMax: dayBounds[dayBounds.length - 1].t1,
       dayBounds,
+      prognosScrollT: firstPrognosBand?.t0 ?? null,
       mode: chartMode === 'dygnsmedel' ? 'daily' : 'detailed',
       unitLabel: includeFees ? 'öre per kilowattimme inklusive' : 'öre per kilowattimme spot',
     });
@@ -483,7 +488,11 @@
         parts.push('kvarts-/timdata igår–imorgon (spot)');
         if (!tomorrowSpot?.series?.length) parts.push('imorgon: prognos om spot saknas');
         parts.push(`${FORECAST_DAYS} prognosdagar timvis (streckad)`);
-        parts.push('svep horisontellt vid behov');
+      }
+      if (forecastPts.length) {
+        parts.push(`prognos i diagram: ${forecastPts.length} punkter`);
+      } else {
+        parts.push('ingen prognosdata i diagrammet');
       }
       parts.push(includeFees ? 'värden inkl. avgifter' : 'rena spotvärden');
       els.chartSub.textContent = parts.join(' · ');
