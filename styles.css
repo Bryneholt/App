@@ -292,6 +292,35 @@ body {
   color: var(--muted);
 }
 
+.price-block__spot-ref {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.price-block__spot-ref[hidden],
+.price-block__fees[hidden] {
+  display: none;
+}
+
+.price-block__fees {
+  margin: 0.35rem 0 0;
+  padding: 0.45rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--fg);
+  background: color-mix(in srgb, var(--forecast-bg) 85%, transparent);
+  border-radius: 0.45rem;
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+
+.price-block__fees strong {
+  font-weight: 600;
+  color: var(--accent-dim);
+}
+
 .price-block__meta {
   margin: 0.45rem 0 0;
   font-size: 0.8rem;
@@ -627,6 +656,17 @@ body {
   font-variant-numeric: tabular-nums;
   color: var(--accent-dim);
   text-align: right;
+}
+
+.forecast-row__fees {
+  grid-column: 1 / -1;
+  font-size: 0.72rem;
+  color: var(--fg);
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--forecast-bg) 75%, transparent);
+  border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
 }
 
 .forecast-row__range {
