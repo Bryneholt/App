@@ -297,45 +297,47 @@ body {
 }
 
 .price-block__fees {
-  margin: 0.4rem 0 0;
-  padding: 0.5rem 0.55rem;
-  font-size: 0.75rem;
-  line-height: 1.35;
+  margin: 0.28rem 0 0;
+  padding: 0.35rem 0.4rem;
+  font-size: 0.68rem;
+  line-height: 1.2;
   color: var(--fg);
   background: color-mix(in srgb, var(--forecast-bg) 85%, transparent);
-  border-radius: 0.45rem;
+  border-radius: 0.4rem;
   border: 1px solid var(--border);
 }
 
 .fee-pivot {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.74rem;
+  font-size: 0.66rem;
+  line-height: 1.15;
 }
 
 .fee-pivot__caption {
-  margin: 0 0 0.4rem;
+  margin: 0 0 0.2rem;
+  padding: 0;
   text-align: left;
-  font-size: 0.65rem;
+  font-size: 0.58rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   color: var(--muted);
 }
 
 .fee-pivot__row th,
 .fee-pivot__row td {
-  padding: 0.35rem 0.15rem;
-  vertical-align: baseline;
-  border-bottom: 1px solid var(--border);
+  padding: 0.14rem 0.05rem;
+  vertical-align: middle;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
 }
 
 .fee-pivot__row th {
   text-align: left;
   font-weight: 500;
   color: var(--muted);
-  font-size: 0.72rem;
-  padding-right: 0.5rem;
+  font-size: 0.64rem;
+  padding-right: 0.35rem;
+  line-height: 1.2;
 }
 
 .fee-pivot__row--spot th {
@@ -346,22 +348,21 @@ body {
 .fee-pivot__amount {
   text-align: right;
   white-space: nowrap;
-  width: 42%;
+  width: 38%;
 }
 
 .fee-pivot__value {
-  display: block;
+  display: inline;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.82rem;
+  font-size: 0.7rem;
   color: var(--fg);
 }
 
 .fee-pivot__hint {
-  display: block;
-  margin-top: 0.1rem;
-  font-size: 0.6rem;
+  display: inline;
+  font-size: 0.56rem;
   color: var(--muted);
   font-weight: 400;
 }
@@ -375,15 +376,15 @@ body {
 .fee-pivot__row--total th,
 .fee-pivot__row--total .fee-pivot__value {
   font-weight: 700;
-  font-size: 0.9rem;
+  font-size: 0.74rem;
   color: var(--accent);
 }
 
 .fee-pivot tfoot .fee-pivot__row th,
 .fee-pivot tfoot .fee-pivot__row td {
   border-bottom: none;
-  border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-  padding-top: 0.45rem;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  padding-top: 0.18rem;
 }
 
 .price-block__meta {
@@ -725,15 +726,20 @@ body {
 
 .forecast-row__fees {
   grid-column: 1 / -1;
-  margin: 0.15rem 0 0.1rem;
-  padding: 0.4rem 0.45rem;
-  border-radius: 0.4rem;
+  margin: 0.1rem 0 0.05rem;
+  padding: 0.3rem 0.35rem;
+  border-radius: 0.35rem;
   background: color-mix(in srgb, var(--forecast-bg) 75%, transparent);
   border: 1px solid var(--border);
 }
 
 .forecast-row__fees .fee-pivot__caption {
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.12rem;
+}
+
+.forecast-row {
+  gap: 0.2rem 0.65rem;
+  padding: 0.45rem 0;
 }
 
 .forecast-row__range {
