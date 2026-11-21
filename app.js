@@ -278,8 +278,8 @@
   }
 
   function feePivotAmountCell(line) {
-    const hint = line.exMoms ? 'ex moms' : 'inkl. moms';
-    return `<td class="fee-pivot__amount"><span class="fee-pivot__value">${line.value.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh ${hint}</span></td>`;
+    const hint = line.exMoms ? 'ex' : 'inkl';
+    return `<td class="fee-pivot__amount"><span class="fee-pivot__value">${line.value.toLocaleString('sv-SE')}</span><span class="fee-pivot__hint"> öre ${hint}</span></td>`;
   }
 
   function feeBreakdownHtml(spotOreEx) {
@@ -296,7 +296,7 @@
       .join('');
     return `
       <table class="fee-pivot">
-        <caption class="fee-pivot__caption">Upställd pris per kWh</caption>
+        <caption class="fee-pivot__caption">Uppdelning öre/kWh</caption>
         <thead class="visually-hidden">
           <tr><th scope="col">Post</th><th scope="col">Belopp</th></tr>
         </thead>
@@ -308,13 +308,13 @@
           ${feeRows}
           <tr class="fee-pivot__row fee-pivot__row--addon">
             <th scope="row">Summa avgifter</th>
-            <td class="fee-pivot__amount"><span class="fee-pivot__value">${addonSum.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh inkl. moms</span></td>
+            <td class="fee-pivot__amount"><span class="fee-pivot__value">${addonSum.toLocaleString('sv-SE')}</span><span class="fee-pivot__hint"> öre inkl</span></td>
           </tr>
         </tbody>
         <tfoot>
           <tr class="fee-pivot__row fee-pivot__row--total">
             <th scope="row">Summa totalt</th>
-            <td class="fee-pivot__amount"><span class="fee-pivot__value">${total.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh inkl. moms</span></td>
+            <td class="fee-pivot__amount"><span class="fee-pivot__value">${total.toLocaleString('sv-SE')}</span><span class="fee-pivot__hint"> öre inkl</span></td>
           </tr>
         </tfoot>
       </table>`;
