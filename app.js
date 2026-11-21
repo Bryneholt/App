@@ -51,8 +51,9 @@
     feeBreakdownLines,
     feePivotData,
     feeBreakdownHint,
-    loadIncludeFeesPreference,
-    saveIncludeFeesPreference,
+    loadFeeTogglePreferences,
+    saveIncludeGridPreference,
+    saveIncludeAddonsPreference,
     loadNetProfileId,
     saveNetProfileId,
     NET_PROFILES,
@@ -223,7 +224,8 @@
     updatedAt: el('updated-at'),
     zonesHint: el('zones-hint'),
     zoneButtons: document.querySelectorAll('.zone-btn'),
-    includeFeesSwitch: el('include-fees'),
+    includeGridSwitch: el('include-grid'),
+    includeAddonsSwitch: el('include-addons'),
     netProfileSelect: el('net-profile'),
     feeHint: el('fee-hint'),
     priceUnits: document.querySelectorAll('.price-unit'),
@@ -234,7 +236,7 @@
 
   let loading = false;
   let activeZone = DEFAULT_ZONE;
-  let includeFees = loadIncludeFeesPreference();
+  let feeToggles = loadFeeTogglePreferences();
   let netProfileId = loadNetProfileId();
   let chartMode = 'detaljerad';
   let cachedView = null;
@@ -272,9 +274,12 @@
     return DEFAULT_ZONE;
   }
 
+  function anyFeeLayerOn() {
+    return feeToggles.includeGrid || feeToggles.includeAddons;
+  }
+
   function displayOre(spotOreEx) {
-    if (!includeFees) return spotOreEx;
-    return consumerTotalOre(spotOreEx, activeZone, netProfileId);
+    return consumerTotalOre(spotOreEx, activeZone, netProfileId, feeToggles);
   }
 
   function feePivotAmountCell(line) {
@@ -287,12 +292,14 @@
       spotOreEx,
       activeZone,
       netProfileId,
+      feeToggles,
     );
     const feeRows = feeLines
       .map((line) => {
         const kindClass =
           line.kind === 'vat' ? 'fee-pivot__row--vat' : 'fee-pivot__row--fee';
-        return `<tr class="fee-pivot__row ${kindClass}"><th scope="row">${line.label}</th>${feePivotAmountCell(line)}</tr>`;
+        const offClass = line.active ? '' : ' fee-pivot__row--off';
+        return `<tr class="fee-pivot__row ${kindClass}${offClass}"><th scope="row">${line.label}</th>${feePivotAmountCell(line)}</tr>`;
       })
       .join('');
     return `
@@ -323,7 +330,7 @@
 
   function applyFeeRows(spotOreEx, feesEl) {
     if (!feesEl) return;
-    if (!includeFees || spotOreEx == null || Number.isNaN(Number(spotOreEx))) {
+    if (!anyFeeLayerOn() || spotOreEx == null || Number.isNaN(Number(spotOreEx))) {
       feesEl.hidden = true;
       feesEl.replaceChildren();
       return;
@@ -333,7 +340,7 @@
   }
 
   function forecastFeesBlock(spotOreEx) {
-    if (!includeFees || spotOreEx == null) return null;
+    if (!anyFeeLayerOn() || spotOreEx == null) return null;
     const wrap = document.createElement('div');
     wrap.className = 'forecast-row__fees';
     wrap.innerHTML = feeBreakdownHtml(spotOreEx);
@@ -341,28 +348,44 @@
   }
 
   function displayForecastBand(p10, p90) {
-    if (!includeFees) return { p10, p90 };
     return {
-      p10: consumerTotalFromForecastBand(p10, activeZone, netProfileId),
-      p90: consumerTotalFromForecastBand(p90, activeZone, netProfileId),
+      p10: consumerTotalFromForecastBand(p10, activeZone, netProfileId, feeToggles),
+      p90: consumerTotalFromForecastBand(p90, activeZone, netProfileId, feeToggles),
     };
   }
 
+  function priceUnitLabel() {
+    if (!anyFeeLayerOn()) return 'öre/kWh spot';
+    return 'öre/kWh inkl. moms';
+  }
+
   function updatePriceModeUi() {
-    const unitLabel = includeFees ? 'öre/kWh inkl. moms' : 'öre/kWh spot';
+    const unitLabel = priceUnitLabel();
     els.priceUnits?.forEach((node) => {
       node.textContent = unitLabel;
     });
-    if (els.includeFeesSwitch) {
-      els.includeFeesSwitch.checked = includeFees;
-      els.includeFeesSwitch.setAttribute('aria-checked', includeFees ? 'true' : 'false');
+    if (els.includeGridSwitch) {
+      els.includeGridSwitch.checked = feeToggles.includeGrid;
+      els.includeGridSwitch.setAttribute(
+        'aria-checked',
+        feeToggles.includeGrid ? 'true' : 'false',
+      );
+    }
+    if (els.includeAddonsSwitch) {
+      els.includeAddonsSwitch.checked = feeToggles.includeAddons;
+      els.includeAddonsSwitch.setAttribute(
+        'aria-checked',
+        feeToggles.includeAddons ? 'true' : 'false',
+      );
     }
     if (els.feeHint) {
-      els.feeHint.textContent = includeFees ? feeBreakdownHint(activeZone, netProfileId) : '';
-      els.feeHint.hidden = !includeFees;
+      els.feeHint.textContent = anyFeeLayerOn()
+        ? feeBreakdownHint(activeZone, netProfileId, feeToggles)
+        : 'Båda växlarna av — visar spot ex moms utan överföring, skatt eller moms.';
+      els.feeHint.hidden = false;
     }
     if (els.forecastSub) {
-      els.forecastSub.textContent = includeFees
+      els.forecastSub.textContent = anyFeeLayerOn()
         ? `${FORECAST_DAYS} dagar efter imorgon · uppskattat totalt`
         : `${FORECAST_DAYS} dagar efter imorgon · medel p50 per dygn`;
     }
@@ -547,7 +570,9 @@
       dayBounds,
       prognosScrollT: firstPrognosBand?.t0 ?? null,
       mode: chartMode === 'dygnsmedel' ? 'daily' : 'detailed',
-      unitLabel: includeFees ? 'öre per kilowattimme inklusive' : 'öre per kilowattimme spot',
+      unitLabel: anyFeeLayerOn()
+        ? 'öre per kilowattimme inklusive'
+        : 'öre per kilowattimme spot',
     });
 
     if (els.chartSub) {
@@ -565,7 +590,7 @@
       } else {
         parts.push('ingen prognosdata i diagrammet');
       }
-      parts.push(includeFees ? 'totalt inkl. moms i diagram' : 'rena spotvärden');
+      parts.push(anyFeeLayerOn() ? 'pris enligt växlarna i diagram' : 'rena spotvärden');
       els.chartSub.textContent = parts.join(' · ');
     }
     updateChartModeUi();
@@ -584,7 +609,7 @@
     els.todayNumber.textContent = displayOre(data.avgOre).toLocaleString('sv-SE');
     applyFeeRows(data.avgOre, els.todayFees);
     const krMwh = (data.avgKr * 1000).toLocaleString('sv-SE', { maximumFractionDigits: 0 });
-    const extra = includeFees ? '' : ` · ${krMwh} kr/MWh`;
+    const extra = anyFeeLayerOn() ? '' : ` · ${krMwh} kr/MWh`;
     if (els.todayMeta) {
       els.todayMeta.textContent = `Medel · ${data.intervals} intervall${extra}`;
     }
@@ -596,12 +621,12 @@
 
     if (data?.kind === 'spot') {
       if (els.tomorrowBadge) {
-        els.tomorrowBadge.textContent = includeFees ? 'Publicerat' : 'Spot';
+        els.tomorrowBadge.textContent = anyFeeLayerOn() ? 'Publicerat' : 'Spot';
         els.tomorrowBadge.className = 'badge badge--spot';
       }
       els.tomorrowNumber.textContent = displayOre(data.avgOre).toLocaleString('sv-SE');
       applyFeeRows(data.avgOre, els.tomorrowFees);
-      const suffix = includeFees
+      const suffix = anyFeeLayerOn()
         ? ''
         : `${(data.avgKr * 1000).toLocaleString('sv-SE', { maximumFractionDigits: 0 })} kr/MWh`;
       if (els.tomorrowMeta) {
@@ -619,7 +644,7 @@
       const band = displayForecastBand(fc.p10, fc.p90);
       els.tomorrowNumber.textContent = displayOre(fc.avgOre).toLocaleString('sv-SE');
       applyFeeRows(fc.avgOre, els.tomorrowFees);
-      const rangeLabel = includeFees ? 'intervall inkl. moms' : 'p10–p90';
+      const rangeLabel = anyFeeLayerOn() ? 'intervall inkl. moms' : 'p10–p90';
       if (els.tomorrowMeta) {
         els.tomorrowMeta.textContent = `${shortDayLabel(tomorrowIso)} · ${band.p10}–${band.p90} öre (${rangeLabel}) · publiceras ~13`;
       }
@@ -657,13 +682,13 @@
       const displayVal = fc ? displayOre(fc.avgOre) : null;
       val.textContent = displayVal != null ? `${displayVal.toLocaleString('sv-SE')} öre` : '—';
 
-      const fees = fc && includeFees ? forecastFeesBlock(fc.avgOre) : null;
+      const fees = fc && anyFeeLayerOn() ? forecastFeesBlock(fc.avgOre) : null;
 
       const range = document.createElement('span');
       range.className = 'forecast-row__range';
       if (fc) {
         const band = displayForecastBand(fc.p10, fc.p90);
-        range.textContent = includeFees
+        range.textContent = anyFeeLayerOn()
           ? `Prognosintervall ${band.p10}–${band.p90} öre/kWh inkl. moms`
           : `Osäkerhetsintervall ${fc.p10}–${fc.p90} öre/kWh spot (utan moms)`;
       } else {
@@ -678,7 +703,7 @@
 
     const issued = meta?.issued ? `Prognos utfärdad ${meta.issued}` : '';
     const model = meta?.model ? `modell ${meta.model}` : '';
-    const mode = includeFees ? feeBreakdownHint(activeZone, netProfileId) : '';
+    const mode = anyFeeLayerOn() ? feeBreakdownHint(activeZone, netProfileId, feeToggles) : '';
     if (els.forecastNote) {
       els.forecastNote.textContent = [issued, model, mode].filter(Boolean).join(' · ');
     }
@@ -797,12 +822,19 @@
   }
 
   function bindUi() {
-    els.includeFeesSwitch?.addEventListener('change', () => {
-      includeFees = els.includeFeesSwitch.checked;
-      saveIncludeFeesPreference(includeFees);
+    const syncTogglesFromUi = () => {
+      feeToggles = {
+        includeGrid: Boolean(els.includeGridSwitch?.checked),
+        includeAddons: Boolean(els.includeAddonsSwitch?.checked),
+      };
+      saveIncludeGridPreference(feeToggles.includeGrid);
+      saveIncludeAddonsPreference(feeToggles.includeAddons);
       updatePriceModeUi();
       renderFromCache();
-    });
+    };
+
+    els.includeGridSwitch?.addEventListener('change', syncTogglesFromUi);
+    els.includeAddonsSwitch?.addEventListener('change', syncTogglesFromUi);
 
     els.netProfileSelect?.addEventListener('change', () => {
       netProfileId = els.netProfileSelect.value;
@@ -842,10 +874,9 @@
   }
 
   function start() {
-    includeFees = loadIncludeFeesPreference();
+    feeToggles = loadFeeTogglePreferences();
     netProfileId = loadNetProfileId();
     chartMode = loadChartMode();
-    if (els.includeFeesSwitch) els.includeFeesSwitch.checked = includeFees;
     bindUi();
     updatePriceModeUi();
     updateChartModeUi();
