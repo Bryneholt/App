@@ -48,6 +48,7 @@
     feeAddonOre,
     feeAddonDetailLine,
     feeBreakdownLines,
+    feePivotData,
     feeBreakdownHint,
     loadIncludeFeesPreference,
     saveIncludeFeesPreference,
@@ -275,15 +276,47 @@
     return consumerTotalOre(spotOreEx, activeZone, netProfileId);
   }
 
+  function feePivotAmountCell(line) {
+    const hint = line.exMoms ? 'ex moms' : 'inkl. moms';
+    return `<td class="fee-pivot__amount"><span class="fee-pivot__value">${line.value.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh ${hint}</span></td>`;
+  }
+
   function feeBreakdownHtml(spotOreEx) {
-    const lines = feeBreakdownLines(spotOreEx, activeZone, netProfileId);
-    const rows = lines
-      .map((line) => {
-        const unit = line.exMoms ? 'ex moms' : 'inkl. moms';
-        return `<div class="fee-breakdown__row"><span class="fee-breakdown__label">${line.label}</span><span class="fee-breakdown__value"><span class="fee-breakdown__amount">${line.value.toLocaleString('sv-SE')}</span> <span class="fee-breakdown__unit">öre ${unit}</span></span></div>`;
-      })
+    const { spotLine, feeLines, addonSum, total } = feePivotData(
+      spotOreEx,
+      activeZone,
+      netProfileId,
+    );
+    const feeRows = feeLines
+      .map(
+        (line) =>
+          `<tr class="fee-pivot__row fee-pivot__row--fee"><th scope="row">${line.label}</th>${feePivotAmountCell(line)}</tr>`,
+      )
       .join('');
-    return `<p class="fee-breakdown__title">Uppdelning per kWh</p><div class="fee-breakdown">${rows}</div>`;
+    return `
+      <table class="fee-pivot">
+        <caption class="fee-pivot__caption">Upställd pris per kWh</caption>
+        <thead class="visually-hidden">
+          <tr><th scope="col">Post</th><th scope="col">Belopp</th></tr>
+        </thead>
+        <tbody>
+          <tr class="fee-pivot__row fee-pivot__row--spot">
+            <th scope="row">${spotLine.label}</th>
+            ${feePivotAmountCell(spotLine)}
+          </tr>
+          ${feeRows}
+          <tr class="fee-pivot__row fee-pivot__row--addon">
+            <th scope="row">Summa avgifter</th>
+            <td class="fee-pivot__amount"><span class="fee-pivot__value">${addonSum.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh inkl. moms</span></td>
+          </tr>
+        </tbody>
+        <tfoot>
+          <tr class="fee-pivot__row fee-pivot__row--total">
+            <th scope="row">Summa totalt</th>
+            <td class="fee-pivot__amount"><span class="fee-pivot__value">${total.toLocaleString('sv-SE')}</span> <span class="fee-pivot__hint">öre/kWh inkl. moms</span></td>
+          </tr>
+        </tfoot>
+      </table>`;
   }
 
   function applyFeeRows(spotOreEx, feesEl) {

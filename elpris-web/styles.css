@@ -307,8 +307,15 @@ body {
   border: 1px solid var(--border);
 }
 
-.fee-breakdown__title {
-  margin: 0 0 0.35rem;
+.fee-pivot {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.74rem;
+}
+
+.fee-pivot__caption {
+  margin: 0 0 0.4rem;
+  text-align: left;
   font-size: 0.65rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -316,49 +323,67 @@ body {
   color: var(--muted);
 }
 
-.fee-breakdown {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+.fee-pivot__row th,
+.fee-pivot__row td {
+  padding: 0.35rem 0.15rem;
+  vertical-align: baseline;
+  border-bottom: 1px solid var(--border);
 }
 
-.fee-breakdown__row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 0.65rem;
-  padding: 0.28rem 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
-}
-
-.fee-breakdown__row:last-child {
-  border-bottom: none;
-}
-
-.fee-breakdown__label {
-  flex: 1 1 auto;
-  font-size: 0.72rem;
-  color: var(--muted);
+.fee-pivot__row th {
+  text-align: left;
   font-weight: 500;
+  color: var(--muted);
+  font-size: 0.72rem;
+  padding-right: 0.5rem;
 }
 
-.fee-breakdown__value {
-  flex: 0 0 auto;
+.fee-pivot__row--spot th {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.fee-pivot__amount {
   text-align: right;
   white-space: nowrap;
+  width: 42%;
 }
 
-.fee-breakdown__amount {
+.fee-pivot__value {
+  display: block;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.78rem;
+  font-size: 0.82rem;
   color: var(--fg);
 }
 
-.fee-breakdown__unit {
-  font-size: 0.62rem;
+.fee-pivot__hint {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.6rem;
   color: var(--muted);
+  font-weight: 400;
+}
+
+.fee-pivot__row--addon th,
+.fee-pivot__row--addon .fee-pivot__value {
+  font-weight: 600;
+  color: var(--accent-dim);
+}
+
+.fee-pivot__row--total th,
+.fee-pivot__row--total .fee-pivot__value {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent);
+}
+
+.fee-pivot tfoot .fee-pivot__row th,
+.fee-pivot tfoot .fee-pivot__row td {
+  border-bottom: none;
+  border-top: 2px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  padding-top: 0.45rem;
 }
 
 .price-block__meta {
@@ -707,7 +732,7 @@ body {
   border: 1px solid var(--border);
 }
 
-.forecast-row__fees .fee-breakdown__title {
+.forecast-row__fees .fee-pivot__caption {
   margin-bottom: 0.25rem;
 }
 

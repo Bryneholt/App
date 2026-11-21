@@ -85,13 +85,22 @@
     const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
     return [
-      { label: 'Spot', value: spot, exMoms: true },
-      { label: 'Elnät (variabel)', value: Math.round(gridEx * VAT), exMoms: false },
-      { label: 'Energiskatt', value: Math.round(taxEx * VAT), exMoms: false },
-      { label: 'Elcertifikat', value: Math.round(CERTIFICATE_ORE_EX * VAT), exMoms: false },
-      { label: 'Handel (rörligt)', value: Math.round(RETAIL_VARIABLE_ORE_EX * VAT), exMoms: false },
-      { label: 'Moms på el (spot)', value: Math.round(spot * (VAT - 1)), exMoms: false },
+      { label: 'Elpris (spot)', value: spot, exMoms: true, kind: 'spot' },
+      { label: 'Elnät (variabel)', value: Math.round(gridEx * VAT), exMoms: false, kind: 'fee' },
+      { label: 'Energiskatt', value: Math.round(taxEx * VAT), exMoms: false, kind: 'fee' },
+      { label: 'Elcertifikat', value: Math.round(CERTIFICATE_ORE_EX * VAT), exMoms: false, kind: 'fee' },
+      { label: 'Handel (rörligt)', value: Math.round(RETAIL_VARIABLE_ORE_EX * VAT), exMoms: false, kind: 'fee' },
+      { label: 'Moms på el (spot)', value: Math.round(spot * (VAT - 1)), exMoms: false, kind: 'fee' },
     ];
+  }
+
+  function feePivotData(spotOreEx, zone, profileId = 'lagenhet') {
+    const lines = feeBreakdownLines(spotOreEx, zone, profileId);
+    const spotLine = lines.find((l) => l.kind === 'spot') ?? lines[0];
+    const feeLines = lines.filter((l) => l.kind === 'fee');
+    const addonSum = feeLines.reduce((sum, line) => sum + line.value, 0);
+    const total = consumerTotalOre(spotOreEx, zone, profileId);
+    return { spotLine, feeLines, addonSum, total };
   }
 
   function feeBreakdownHint(zone, profileId = 'lagenhet') {
@@ -149,6 +158,7 @@
     feeAddonOre,
     feeAddonDetailLine,
     feeBreakdownLines,
+    feePivotData,
     feeBreakdownHint,
     loadIncludeFeesPreference,
     saveIncludeFeesPreference,
