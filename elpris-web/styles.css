@@ -367,6 +367,10 @@ body {
   font-weight: 400;
 }
 
+.fee-pivot__row--vat th {
+  font-style: italic;
+}
+
 .fee-pivot__row--addon th,
 .fee-pivot__row--addon .fee-pivot__value {
   font-weight: 600;

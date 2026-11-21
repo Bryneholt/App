@@ -48,13 +48,31 @@
     },
   };
 
-  function consumerTotalOre(spotOreEx, zone, profileId = 'lagenhet') {
+  function variableExParts(spotOreEx, zone, profileId = 'lagenhet') {
+    const spotEx = spotOnlyOre(spotOreEx);
     const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
     const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
-    const variableEx =
-      Number(spotOreEx) + gridEx + taxEx + CERTIFICATE_ORE_EX + RETAIL_VARIABLE_ORE_EX;
-    return Math.round(variableEx * VAT);
+    const bundleEx =
+      spotEx + gridEx + taxEx + CERTIFICATE_ORE_EX + RETAIL_VARIABLE_ORE_EX;
+    return {
+      spotEx,
+      gridEx,
+      taxEx,
+      certEx: CERTIFICATE_ORE_EX,
+      retailEx: RETAIL_VARIABLE_ORE_EX,
+      bundleEx,
+    };
+  }
+
+  /** Moms på hela variabla paketet (spot + nät + skatt + cert + handel), ex-rader. */
+  function variableBundleVatOre(bundleEx) {
+    return Math.round(bundleEx * (VAT - 1));
+  }
+
+  function consumerTotalOre(spotOreEx, zone, profileId = 'lagenhet') {
+    const { bundleEx } = variableExParts(spotOreEx, zone, profileId);
+    return Math.round(bundleEx * VAT);
   }
 
   function consumerTotalFromForecastBand(pOreEx, zone, profileId) {
@@ -72,34 +90,52 @@
   }
 
   function feeAddonDetailLine(spotOreEx, zone, profileId = 'lagenhet') {
-    const lines = feeBreakdownLines(spotOreEx, zone, profileId).filter((l) => !l.exMoms);
+    const lines = feeBreakdownLines(spotOreEx, zone, profileId).filter((l) => l.kind !== 'spot');
     return lines.map((l) => `${l.label.toLowerCase()} ${l.value}`).join(', ');
   }
 
   /**
-   * @returns {Array<{label:string,value:number,exMoms:boolean}>}
+   * Pivot: spot + avgifter **ex moms**, en moms-rad på hela paketet, inga per-rad ×1,25.
+   * @returns {Array<{label:string,value:number,exMoms:boolean,kind:'spot'|'fee'|'vat'}>}
    */
   function feeBreakdownLines(spotOreEx, zone, profileId = 'lagenhet') {
-    const spot = spotOnlyOre(spotOreEx);
-    const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
-    const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
-    const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
+    const { spotEx, gridEx, taxEx, certEx, retailEx, bundleEx } = variableExParts(
+      spotOreEx,
+      zone,
+      profileId,
+    );
+    const vatOre = variableBundleVatOre(bundleEx);
     return [
-      { label: 'Elpris (spot)', value: spot, exMoms: true, kind: 'spot' },
-      { label: 'Elnät (variabel)', value: Math.round(gridEx * VAT), exMoms: false, kind: 'fee' },
-      { label: 'Energiskatt', value: Math.round(taxEx * VAT), exMoms: false, kind: 'fee' },
-      { label: 'Elcertifikat', value: Math.round(CERTIFICATE_ORE_EX * VAT), exMoms: false, kind: 'fee' },
-      { label: 'Handel (rörligt)', value: Math.round(RETAIL_VARIABLE_ORE_EX * VAT), exMoms: false, kind: 'fee' },
-      { label: 'Moms på el (spot)', value: Math.round(spot * (VAT - 1)), exMoms: false, kind: 'fee' },
+      { label: 'Elpris (spot)', value: spotEx, exMoms: true, kind: 'spot' },
+      { label: 'Elnät (variabel)', value: gridEx, exMoms: true, kind: 'fee' },
+      { label: 'Energiskatt', value: taxEx, exMoms: true, kind: 'fee' },
+      { label: 'Elcertifikat', value: certEx, exMoms: true, kind: 'fee' },
+      { label: 'Handel (rörligt)', value: retailEx, exMoms: true, kind: 'fee' },
+      { label: 'Moms (25 %)', value: vatOre, exMoms: false, kind: 'vat' },
     ];
   }
 
   function feePivotData(spotOreEx, zone, profileId = 'lagenhet') {
     const lines = feeBreakdownLines(spotOreEx, zone, profileId);
     const spotLine = lines.find((l) => l.kind === 'spot') ?? lines[0];
-    const feeLines = lines.filter((l) => l.kind === 'fee');
-    const addonSum = feeLines.reduce((sum, line) => sum + line.value, 0);
+    const feeLines = lines.filter((l) => l.kind === 'fee' || l.kind === 'vat');
     const total = consumerTotalOre(spotOreEx, zone, profileId);
+    const spotEx = spotLine.value;
+    // Tillägg inkl. moms ovanpå spot ex (nät, skatt, cert, handel + moms) — ej dubbelräkning.
+    const addonSum = total - spotEx;
+
+    const partsSum = spotEx + feeLines.reduce((sum, line) => sum + line.value, 0);
+  /*
+    partsSum avrundas ibland ±1 öre mot total eftersom total = round(bundle×1,25)
+    medan moms-raden är round(bundle×0,25); spotEx + addonSum ska alltid matcha total.
+   */
+    if (Math.abs(spotEx + addonSum - total) > 0) {
+      console.warn('[ElprisFees] spot + addonSum !== total', { spotEx, addonSum, total });
+    }
+    if (Math.abs(partsSum - total) > 1) {
+      console.warn('[ElprisFees] pivot parts vs total > 1 öre', { partsSum, total, spotOreEx, zone });
+    }
+
     return { spotLine, feeLines, addonSum, total };
   }
 
@@ -108,8 +144,9 @@
     const grid = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const tax = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
     return (
-      `Spot + nät ~${grid} + skatt ${tax} + cert/handels-påslag öre/kWh (ex moms), ` +
-      '× moms 25 %. Endast variabla delar — fasta månadsavgifter ingår inte. ' +
+      `Spot, nät ~${grid}, skatt ${tax} och cert/handels-påslag visas **ex moms**; ` +
+      'moms 25 % beräknas en gång på (spot+nät+skatt+cert+handel). ' +
+      'Summa avgifter = totalt minus spot ex. Endast variabla delar — inga fasta månadsavgifter. ' +
       'Nätsiffran är zonmedel, inte din adress.'
     );
   }
