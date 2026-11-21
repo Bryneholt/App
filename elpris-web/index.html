@@ -22,18 +22,32 @@
         <h1 class="zone-label" id="zone-label">—</h1>
         <p class="zone-sub" id="zone-sub" aria-live="polite"></p>
         <div class="fee-controls">
-          <label class="fee-switch" for="include-fees">
-            <span class="fee-switch__label">Inkl. alla avgifter</span>
-            <input
-              type="checkbox"
-              id="include-fees"
-              class="fee-switch__input"
-              checked
-              role="switch"
-              aria-checked="true"
-            />
-            <span class="fee-switch__track" aria-hidden="true"></span>
-          </label>
+          <div class="fee-toggles" role="group" aria-label="Prisberäkning">
+            <label class="fee-switch" for="include-grid">
+              <span class="fee-switch__label">Inkl. överföring (elnät)</span>
+              <input
+                type="checkbox"
+                id="include-grid"
+                class="fee-switch__input"
+                checked
+                role="switch"
+                aria-checked="true"
+              />
+              <span class="fee-switch__track" aria-hidden="true"></span>
+            </label>
+            <label class="fee-switch" for="include-addons">
+              <span class="fee-switch__label">Inkl. skatt &amp; påslag</span>
+              <input
+                type="checkbox"
+                id="include-addons"
+                class="fee-switch__input"
+                checked
+                role="switch"
+                aria-checked="true"
+              />
+              <span class="fee-switch__track" aria-hidden="true"></span>
+            </label>
+          </div>
           <label class="fee-profile" for="net-profile">
             <span class="visually-hidden">Nätprofil</span>
             <select id="net-profile" class="fee-profile__select" aria-label="Nätprofil för beräkning"></select>
