@@ -144,7 +144,10 @@
     const year = isoKey.slice(0, 4);
     const monthDay = isoKey.slice(5);
     const url = `${SPOT_API}/${year}/${monthDay}_${zone}.json`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`Spot HTTP ${res.status}`);
 
@@ -170,7 +173,10 @@
 
   async function fetchForecastDailyMap(zone) {
     const url = `${FORECAST_API}?zon=${encodeURIComponent(zone)}`;
-    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    const res = await fetch(url, {
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
     if (!res.ok) throw new Error(`Prognos HTTP ${res.status}`);
 
     const body = await res.json();
@@ -222,6 +228,7 @@
     forecastNote: el('forecast-note'),
     forecastSub: el('forecast-sub'),
     updatedAt: el('updated-at'),
+    refreshBtn: el('refresh-prices'),
     zonesHint: el('zones-hint'),
     zoneButtons: document.querySelectorAll('.zone-btn'),
     includeGridSwitch: el('include-grid'),
@@ -234,7 +241,14 @@
     chartModeButtons: document.querySelectorAll('[data-chart-mode]'),
   };
 
+  const REFRESH_INTERVAL_MS = 10 * 60 * 1000;
+  const VISIBILITY_STALE_MS = 5 * 60 * 1000;
+  const REFRESH_RETRY_MS = 30 * 1000;
+
   let loading = false;
+  let lastFetchedAt = null;
+  let refreshIntervalId = null;
+  let refreshRetryTimer = null;
   let activeZone = DEFAULT_ZONE;
   let feeToggles = loadFeeTogglePreferences();
   let netProfileId = loadNetProfileId();
@@ -723,18 +737,51 @@
     els.tomorrowBlock?.classList.add('is-error');
   }
 
-  async function loadZone(zone, { geoNote, persist = true } = {}) {
-    if (loading) return;
+  function markDataFetched() {
+    lastFetchedAt = Date.now();
+    if (els.updatedAt) {
+      els.updatedAt.textContent = `Uppdaterad ${formatUpdatedAt(new Date(lastFetchedAt))}`;
+    }
+  }
+
+  function scheduleZoneRefresh() {
+    if (loading) {
+      if (refreshRetryTimer) clearTimeout(refreshRetryTimer);
+      refreshRetryTimer = setTimeout(() => scheduleZoneRefresh(), REFRESH_RETRY_MS);
+      return;
+    }
+    loadZone(activeZone, { persist: false, background: true });
+  }
+
+  function startAutoRefresh() {
+    if (refreshIntervalId != null) return;
+    refreshIntervalId = setInterval(() => scheduleZoneRefresh(), REFRESH_INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (!lastFetchedAt || Date.now() - lastFetchedAt > VISIBILITY_STALE_MS) {
+        scheduleZoneRefresh();
+      }
+    });
+  }
+
+  async function loadZone(zone, { geoNote, persist = true, background = false } = {}) {
+    if (loading) {
+      if (background) scheduleZoneRefresh();
+      return;
+    }
     loading = true;
-    renderZone(zone, geoNote);
+    const prevTodayIso = cachedView?.todayIso;
+    if (!background || geoNote) renderZone(zone, geoNote);
 
     const blocks = [els.todayBlock, els.tomorrowBlock];
-    setBlockLoading(blocks, true);
-    if (els.todayNumber) els.todayNumber.textContent = '…';
-    if (els.tomorrowNumber) els.tomorrowNumber.textContent = '…';
-    setAppStatus(`Hämtar priser för ${zone} …`, 'loading');
-    els.forecastList?.replaceChildren();
-    chart?.destroy(els.priceChart);
+    if (!background) {
+      setBlockLoading(blocks, true);
+      if (els.todayNumber) els.todayNumber.textContent = '…';
+      if (els.tomorrowNumber) els.tomorrowNumber.textContent = '…';
+      setAppStatus(`Hämtar priser för ${zone} …`, 'loading');
+      els.forecastList?.replaceChildren();
+      chart?.destroy(els.priceChart);
+    }
 
     const todayIso = stockholmDateParts().iso;
     const tomorrowIso = isoKeyOffsetDays(todayIso, 1);
@@ -759,11 +806,14 @@
         forecast,
       };
 
+      // Vid ny Stockholms-dygn (t.ex. efter midnatt) byter todayIso — nya fetch-nycklar används här.
+      void prevTodayIso;
+
       renderToday(todaySpot);
       renderTomorrow(tomorrowSpot, tomorrowIso, forecast.daily);
       renderForecast(forecast.daily, todayIso, forecast);
       renderPriceChart(cachedView);
-      if (els.updatedAt) els.updatedAt.textContent = `Uppdaterad ${formatUpdatedAt()}`;
+      markDataFetched();
       setAppStatus('', null);
       initialLoadDone = true;
 
@@ -775,9 +825,14 @@
         }
       }
     } catch (err) {
-      showLoadError(err);
+      if (!background || !cachedView) {
+        showLoadError(err);
+      } else {
+        setAppStatus('Kunde inte uppdatera i bakgrunden — försöker igen.', 'error');
+        setTimeout(() => setAppStatus('', null), 4000);
+      }
     } finally {
-      setBlockLoading(blocks, false);
+      if (!background) setBlockLoading(blocks, false);
       loading = false;
     }
   }
@@ -862,6 +917,10 @@
       });
     });
 
+    els.refreshBtn?.addEventListener('click', () => {
+      loadZone(activeZone, { persist: false, background: false });
+    });
+
     if (els.netProfileSelect) {
       for (const id of Object.keys(NET_PROFILES)) {
         const opt = document.createElement('option');
@@ -887,6 +946,7 @@
       persist: false,
     });
     refineZoneFromGeolocation();
+    startAutoRefresh();
   }
 
   if (document.readyState === 'loading') {
