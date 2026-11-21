@@ -1,3 +1,4 @@
+/* Elpris static app — sync with /cursor/stores/self/elpris/ */
 (function () {
   const fees = typeof window !== 'undefined' ? window.ElprisFees : null;
   const chart = typeof window !== 'undefined' ? window.ElprisChart : null;
