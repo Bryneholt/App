@@ -72,10 +72,30 @@
 
       <section class="price-chart-section" aria-labelledby="chart-heading">
         <div class="price-chart-section__head">
-          <h2 id="chart-heading" class="price-chart-section__title">Pris över dygnet</h2>
+          <h2 id="chart-heading" class="price-chart-section__title">Pris över tid</h2>
           <p class="price-chart-section__sub" id="chart-sub">
-            Igår, idag och imorgon · kvartspris spot där det finns
+            Igår, idag, imorgon och 5 prognosdagar · svep diagrammet vid behov
           </p>
+          <div class="chart-mode" role="group" aria-label="Diagramupplösning">
+            <button
+              type="button"
+              class="chart-mode__btn"
+              id="chart-mode-detailed"
+              data-chart-mode="detaljerad"
+              aria-pressed="true"
+            >
+              Detaljerad
+            </button>
+            <button
+              type="button"
+              class="chart-mode__btn"
+              id="chart-mode-daily"
+              data-chart-mode="dygnsmedel"
+              aria-pressed="false"
+            >
+              Dygnsmedel
+            </button>
+          </div>
         </div>
         <div id="price-chart" class="price-chart" aria-live="polite"></div>
       </section>

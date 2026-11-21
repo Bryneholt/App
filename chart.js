@@ -4,6 +4,8 @@
  */
 (function (global) {
   const DAY_LABELS = { yesterday: 'Igår', today: 'Idag', tomorrow: 'Imorgon' };
+  const PX_PER_DAY = 88;
+  const BASE_W = 360;
 
   const LEVEL_RGB = {
     cheap: [52, 211, 153],
@@ -61,6 +63,22 @@
     if (!container) return;
     container.replaceChildren();
     container.classList.remove('price-chart--has-data');
+  }
+
+  function appendMarkers(g, points, xScale, yScale, stats, dashed) {
+    for (const p of points) {
+      const color = colorForValue(p.y, stats);
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', String(xScale(p.t)));
+      dot.setAttribute('cy', String(yScale(p.y)));
+      dot.setAttribute('r', '3.5');
+      dot.setAttribute('fill', color);
+      dot.setAttribute('stroke', 'var(--bg)');
+      dot.setAttribute('stroke-width', '1');
+      if (dashed) dot.setAttribute('class', 'price-chart__dot price-chart__dot--forecast');
+      else dot.setAttribute('class', 'price-chart__dot price-chart__dot--spot');
+      g.append(dot);
+    }
   }
 
   function appendSegments(g, points, xScale, yScale, yBot, stats, dash) {
@@ -127,7 +145,9 @@
     const yTop = yMax + yPad;
     const yBot = Math.max(0, yMin - yPad);
 
-    const W = 360;
+    const dayBounds = data.dayBounds || [];
+    const dayCount = Math.max(dayBounds.length, 3);
+    const W = Math.max(BASE_W, Math.round(dayCount * PX_PER_DAY));
     const H = 200;
     const pad = { l: 36, r: 8, t: 28, b: 32 };
     const innerW = W - pad.l - pad.r;
@@ -173,7 +193,6 @@
     }
     svg.append(gGrid);
 
-    const dayBounds = data.dayBounds || [];
     const gDays = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gDays.setAttribute('class', 'price-chart__days');
     for (const band of dayBounds) {
@@ -184,7 +203,10 @@
       rect.setAttribute('y', String(pad.t));
       rect.setAttribute('width', String(Math.abs(x2 - x1)));
       rect.setAttribute('height', String(innerH));
-      rect.setAttribute('class', `price-chart__band price-chart__band--${band.key}`);
+      const bandClass = band.isForecast
+        ? 'price-chart__band price-chart__band--forecast-day'
+        : `price-chart__band price-chart__band--${band.key}`;
+      rect.setAttribute('class', bandClass);
       gDays.append(rect);
 
       const mid = (x1 + x2) / 2;
@@ -192,8 +214,10 @@
       title.setAttribute('x', String(mid));
       title.setAttribute('y', String(14));
       title.setAttribute('text-anchor', 'middle');
-      title.setAttribute('class', 'price-chart__day-label');
-      title.textContent = DAY_LABELS[band.key] || band.key;
+      title.setAttribute('class', band.isForecast
+        ? 'price-chart__day-label price-chart__day-label--prognos'
+        : 'price-chart__day-label');
+      title.textContent = band.label || DAY_LABELS[band.key] || band.key;
       gDays.append(title);
     }
     svg.append(gDays);
@@ -207,21 +231,32 @@
     meanLine.setAttribute('class', 'price-chart__mean-line');
     svg.append(meanLine);
 
+    const isDaily = data.mode === 'daily';
+    const segmentOpacity = isDaily ? '0.35' : '0.2';
+
     const gSpot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gSpot.setAttribute('class', 'price-chart__series price-chart__series--spot');
     appendSegments(gSpot, spot, xScale, yScale, yBot, stats, null);
+    gSpot.querySelectorAll('.price-chart__segment-area').forEach((node) => {
+      node.setAttribute('fill-opacity', segmentOpacity);
+    });
+    if (isDaily) appendMarkers(gSpot, spot, xScale, yScale, stats, false);
     svg.append(gSpot);
 
     const gFc = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gFc.setAttribute('class', 'price-chart__series price-chart__series--forecast');
     appendSegments(gFc, forecast, xScale, yScale, yBot, stats, '5 4');
+    gFc.querySelectorAll('.price-chart__segment-area').forEach((node) => {
+      node.setAttribute('fill-opacity', segmentOpacity);
+    });
+    if (isDaily) appendMarkers(gFc, forecast, xScale, yScale, stats, true);
     svg.append(gFc);
 
     const gX = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gX.setAttribute('class', 'price-chart__xlabels');
-    const hourMarks = [0, 6, 12, 18];
     for (const band of dayBounds) {
       const dayStart = band.t0;
+      const hourMarks = band.isForecast ? [12] : [0, 6, 12, 18];
       for (const h of hourMarks) {
         const t = dayStart + h * 3600000;
         if (t > tMax) continue;
@@ -231,7 +266,7 @@
         tx.setAttribute('y', String(H - 8));
         tx.setAttribute('text-anchor', 'middle');
         tx.setAttribute('class', 'price-chart__xlabel');
-        tx.textContent = `${h}`;
+        tx.textContent = band.isForecast ? '12' : `${h}`;
         gX.append(tx);
       }
     }
@@ -240,14 +275,15 @@
     const typeLegend = document.createElement('div');
     typeLegend.className = 'price-chart__legend price-chart__legend--type';
     typeLegend.setAttribute('role', 'list');
+    const prognosDays = Math.max(0, dayBounds.filter((b) => b.isForecast).length);
     typeLegend.innerHTML = `
       <span class="price-chart__legend-item" role="listitem">
         <span class="price-chart__swatch price-chart__swatch--spot" aria-hidden="true"></span>
-        Spot (auktionerat)
+        Spot (auktionerat) · igår–imorgon
       </span>
       <span class="price-chart__legend-item" role="listitem">
         <span class="price-chart__swatch price-chart__swatch--forecast" aria-hidden="true"></span>
-        Prognos (modell)
+        Prognos (modell) · imorgon vid behov + ${prognosDays} dagar
       </span>
     `;
 
@@ -269,14 +305,22 @@
         <span>Medel<br><strong>${mean}</strong></span>
         <span>Dyrt<br><strong>${hot}</strong></span>
       </div>
-      <p class="price-chart__scale-note">Färg relativt min–medel–max i synlig period · streckad = prognos</p>
+      <p class="price-chart__scale-note">Färg relativt min–medel–max i hela diagrammet · streckad linje = prognos</p>
     `;
 
+    const scroll = document.createElement('div');
+    scroll.className = 'price-chart__scroll';
+    scroll.setAttribute('tabindex', '0');
+    scroll.setAttribute('role', 'region');
+    scroll.setAttribute('aria-label', 'Tidslinje: svep vågrätt för fler dagar');
+    scroll.append(svg);
+
     container.classList.add('price-chart--has-data');
+    container.classList.toggle('price-chart--wide', W > BASE_W);
     container.dataset.scaleMin = String(cheap);
     container.dataset.scaleMean = String(mean);
     container.dataset.scaleMax = String(hot);
-    container.append(svg, scaleLegend, typeLegend);
+    container.append(scroll, scaleLegend, typeLegend);
   }
 
   global.ElprisChart = { render, destroy, colorForValue, priceStats };
