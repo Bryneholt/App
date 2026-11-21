@@ -288,12 +288,28 @@
     return DEFAULT_ZONE;
   }
 
-  function anyFeeLayerOn() {
-    return feeToggles.includeGrid || feeToggles.includeAddons;
+  function getFeeSwitches() {
+    return {
+      grid: document.getElementById('include-grid'),
+      addons: document.getElementById('include-addons'),
+    };
   }
 
-  function displayOre(spotOreEx) {
-    return consumerTotalOre(spotOreEx, activeZone, netProfileId, feeToggles);
+  function readFeeTogglesFromDom() {
+    const { grid, addons } = getFeeSwitches();
+    return {
+      includeGrid: Boolean(grid?.checked),
+      includeAddons: Boolean(addons?.checked),
+    };
+  }
+
+  function anyFeeLayerOn(toggles = feeToggles) {
+    return toggles.includeGrid || toggles.includeAddons;
+  }
+
+  function displayOre(spotOreEx, toggles = feeToggles) {
+    if (!anyFeeLayerOn(toggles)) return spotOnlyOre(spotOreEx);
+    return consumerTotalOre(spotOreEx, activeZone, netProfileId, toggles);
   }
 
   function feePivotAmountCell(line) {
@@ -378,19 +394,14 @@
     els.priceUnits?.forEach((node) => {
       node.textContent = unitLabel;
     });
-    if (els.includeGridSwitch) {
-      els.includeGridSwitch.checked = feeToggles.includeGrid;
-      els.includeGridSwitch.setAttribute(
-        'aria-checked',
-        feeToggles.includeGrid ? 'true' : 'false',
-      );
+    const { grid, addons } = getFeeSwitches();
+    if (grid) {
+      grid.checked = feeToggles.includeGrid;
+      grid.setAttribute('aria-checked', feeToggles.includeGrid ? 'true' : 'false');
     }
-    if (els.includeAddonsSwitch) {
-      els.includeAddonsSwitch.checked = feeToggles.includeAddons;
-      els.includeAddonsSwitch.setAttribute(
-        'aria-checked',
-        feeToggles.includeAddons ? 'true' : 'false',
-      );
+    if (addons) {
+      addons.checked = feeToggles.includeAddons;
+      addons.setAttribute('aria-checked', feeToggles.includeAddons ? 'true' : 'false');
     }
     if (els.feeHint) {
       els.feeHint.textContent = anyFeeLayerOn()
@@ -424,14 +435,26 @@
     blocks.filter(Boolean).forEach((b) => b.classList.toggle('is-loading', on));
   }
 
-  function renderFromCache() {
+  function recomputeDisplayFromCache() {
     if (!cachedView) return;
     const { todaySpot, tomorrowSpot, tomorrowIso, forecastDaily, forecast } = cachedView;
+    updatePriceModeUi();
     renderToday(todaySpot);
     renderTomorrow(tomorrowSpot, tomorrowIso, forecastDaily);
     renderForecast(forecastDaily, cachedView.todayIso, forecast);
+    chart?.destroy(els.priceChart);
     renderPriceChart(cachedView);
-    updatePriceModeUi();
+  }
+
+  function applyFeeTogglesFromUi() {
+    feeToggles = readFeeTogglesFromDom();
+    saveIncludeGridPreference(feeToggles.includeGrid);
+    saveIncludeAddonsPreference(feeToggles.includeAddons);
+    recomputeDisplayFromCache();
+  }
+
+  function renderFromCache() {
+    recomputeDisplayFromCache();
   }
 
   function appendSpotSeries(target, dayKey, dayData) {
@@ -877,26 +900,28 @@
   }
 
   function bindUi() {
-    const syncTogglesFromUi = () => {
-      feeToggles = {
-        includeGrid: Boolean(els.includeGridSwitch?.checked),
-        includeAddons: Boolean(els.includeAddonsSwitch?.checked),
-      };
-      saveIncludeGridPreference(feeToggles.includeGrid);
-      saveIncludeAddonsPreference(feeToggles.includeAddons);
-      updatePriceModeUi();
-      renderFromCache();
-    };
+    els.includeGridSwitch = getFeeSwitches().grid;
+    els.includeAddonsSwitch = getFeeSwitches().addons;
 
-    els.includeGridSwitch?.addEventListener('change', syncTogglesFromUi);
-    els.includeAddonsSwitch?.addEventListener('change', syncTogglesFromUi);
+    const feeToggleRoot = document.querySelector('.fee-toggles');
+    const onFeeToggleInput = (event) => {
+      const id = event.target?.id;
+      if (id !== 'include-grid' && id !== 'include-addons') return;
+      applyFeeTogglesFromUi();
+    };
+    if (feeToggleRoot) {
+      feeToggleRoot.addEventListener('change', onFeeToggleInput);
+      feeToggleRoot.addEventListener('input', onFeeToggleInput);
+    } else {
+      getFeeSwitches().grid?.addEventListener('change', applyFeeTogglesFromUi);
+      getFeeSwitches().addons?.addEventListener('change', applyFeeTogglesFromUi);
+    }
 
     els.netProfileSelect?.addEventListener('change', () => {
       netProfileId = els.netProfileSelect.value;
       if (!NET_PROFILES[netProfileId]) netProfileId = 'lagenhet';
       saveNetProfileId(netProfileId);
-      updatePriceModeUi();
-      renderFromCache();
+      recomputeDisplayFromCache();
     });
 
     els.zoneButtons?.forEach((btn) => {
@@ -933,6 +958,11 @@
   }
 
   function start() {
+    if (!fees.FEE_MODEL_REV) {
+      console.warn(
+        '[Elpris] Gammal fees.js i cache — prisväxlar kan ignoreras tills sidan laddas om.',
+      );
+    }
     feeToggles = loadFeeTogglePreferences();
     netProfileId = loadNetProfileId();
     chartMode = loadChartMode();

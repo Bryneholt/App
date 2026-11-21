@@ -311,7 +311,10 @@
   }
 
   global.ElprisFees = {
+    FEE_MODEL_REV: 2,
     consumerTotalOre,
+    enabledBundleEx,
+    normalizeToggles,
     consumerTotalFromForecastBand,
     spotOnlyOre,
     feeAddonOre,
