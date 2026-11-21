@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Dagens elspotpris, imorgon och prognos för ditt elområde" />
+    <title>Elpris — idag &amp; prognos</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="page" id="main">
+      <div
+        id="app-status"
+        class="app-status"
+        role="status"
+        aria-live="polite"
+        hidden
+      ></div>
+
+      <header class="header">
+        <p class="eyebrow">Spotpris &amp; prognos</p>
+        <h1 class="zone-label" id="zone-label">—</h1>
+        <p class="zone-sub" id="zone-sub" aria-live="polite"></p>
+        <div class="fee-controls">
+          <label class="fee-switch" for="include-fees">
+            <span class="fee-switch__label">Inkl. alla avgifter</span>
+            <input
+              type="checkbox"
+              id="include-fees"
+              class="fee-switch__input"
+              checked
+              role="switch"
+              aria-checked="true"
+            />
+            <span class="fee-switch__track" aria-hidden="true"></span>
+          </label>
+          <label class="fee-profile" for="net-profile">
+            <span class="visually-hidden">Nätprofil</span>
+            <select id="net-profile" class="fee-profile__select" aria-label="Nätprofil för beräkning"></select>
+          </label>
+        </div>
+        <p class="fee-hint" id="fee-hint" hidden></p>
+      </header>
+
+      <section class="prices" aria-labelledby="prices-heading">
+        <h2 id="prices-heading" class="visually-hidden">Idag och imorgon</h2>
+
+        <article class="price-block price-block--today" aria-labelledby="today-label">
+          <div class="price-block__head">
+            <h3 class="price-block__title" id="today-label">Idag</h3>
+            <span class="badge badge--spot" id="today-badge">Spot</span>
+          </div>
+          <p class="price-block__value" id="today-value" aria-live="polite">
+            <span class="price-number" id="today-number">—</span>
+            <span class="price-unit">öre/kWh</span>
+          </p>
+          <p class="price-block__meta" id="today-meta"></p>
+        </article>
+
+        <article class="price-block price-block--tomorrow" aria-labelledby="tomorrow-label">
+          <div class="price-block__head">
+            <h3 class="price-block__title" id="tomorrow-label">Imorgon</h3>
+            <span class="badge" id="tomorrow-badge">…</span>
+          </div>
+          <p class="price-block__value" id="tomorrow-value" aria-live="polite">
+            <span class="price-number" id="tomorrow-number">—</span>
+            <span class="price-unit">öre/kWh</span>
+          </p>
+          <p class="price-block__meta" id="tomorrow-meta"></p>
+        </article>
+      </section>
+
+      <section class="forecast" aria-labelledby="forecast-heading">
+        <div class="forecast__head">
+          <h2 class="forecast__title" id="forecast-heading">Prognos</h2>
+          <p class="forecast__sub" id="forecast-sub">5 dagar framåt (medel per dygn)</p>
+        </div>
+        <ol class="forecast-list" id="forecast-list" aria-live="polite"></ol>
+        <p class="forecast-note" id="forecast-note"></p>
+      </section>
+
+      <p class="updated" id="updated-at" aria-live="polite"></p>
+
+      <nav class="zones" aria-label="Välj elområde">
+        <p class="zones-hint" id="zones-hint">Hämtar plats …</p>
+        <div class="zone-buttons" role="group" aria-label="Elområde SE1–SE4">
+          <button type="button" class="zone-btn" data-zone="SE1">SE1</button>
+          <button type="button" class="zone-btn" data-zone="SE2">SE2</button>
+          <button type="button" class="zone-btn" data-zone="SE3">SE3</button>
+          <button type="button" class="zone-btn" data-zone="SE4">SE4</button>
+        </div>
+      </nav>
+
+      <footer class="footer">
+        <p class="disclaimer">
+          Växla till spot för pris utan moms, skatter och nät.
+          <strong>Idag/imorgon (spot):</strong>
+          <a href="https://www.elprisetjustnu.se/elpris-api" rel="noopener noreferrer"
+            >elprisetjustnu.se</a
+          >.
+          <strong>Prognos:</strong> modell från
+          <a href="https://elfacit.se/elpris-nasta-vecka" rel="noopener noreferrer">elfacit.se</a>
+          (median p50, intervall p10–p90) — uppskattning, inte auktionerat spot.
+        </p>
+      </footer>
+    </main>
+    <script src="fees.js"></script>
+    <script src="app.js" defer></script>
+  </body>
+</html>
