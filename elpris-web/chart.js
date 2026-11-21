@@ -213,8 +213,8 @@
     const dayBounds = data.dayBounds || [];
     const dayCount = Math.max(dayBounds.length, 3);
     const W = Math.max(BASE_W, Math.round(dayCount * PX_PER_DAY));
-    const H = 200;
-    const pad = { l: 36, r: 8, t: 28, b: 32 };
+    const H = 216;
+    const pad = { l: 36, r: 8, t: 40, b: 32 };
     const innerW = W - pad.l - pad.r;
     const innerH = H - pad.t - pad.b;
 
@@ -260,7 +260,7 @@
 
     const gDays = document.createElementNS('http://www.w3.org/2000/svg', 'g');
     gDays.setAttribute('class', 'price-chart__days');
-    for (const band of dayBounds) {
+    dayBounds.forEach((band, index) => {
       const x1 = xScale(band.t0);
       const x2 = xScale(band.t1);
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -268,11 +268,22 @@
       rect.setAttribute('y', String(pad.t));
       rect.setAttribute('width', String(Math.abs(x2 - x1)));
       rect.setAttribute('height', String(innerH));
+      const altStripe = index % 2 === 1 ? ' price-chart__band--alt' : '';
       const bandClass = band.isForecast
-        ? 'price-chart__band price-chart__band--forecast-day'
-        : `price-chart__band price-chart__band--${band.key}`;
+        ? `price-chart__band price-chart__band--forecast-day${altStripe}`
+        : `price-chart__band price-chart__band--${band.key}${altStripe}`;
       rect.setAttribute('class', bandClass);
       gDays.append(rect);
+
+      if (index > 0) {
+        const divider = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        divider.setAttribute('x1', String(x1));
+        divider.setAttribute('x2', String(x1));
+        divider.setAttribute('y1', String(pad.t));
+        divider.setAttribute('y2', String(H - pad.b));
+        divider.setAttribute('class', 'price-chart__day-divider');
+        gDays.append(divider);
+      }
 
       const mid = (x1 + x2) / 2;
       const title = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -284,7 +295,22 @@
         : 'price-chart__day-label');
       title.textContent = band.label || DAY_LABELS[band.key] || band.key;
       gDays.append(title);
-    }
+
+      if (band.avgY != null && !Number.isNaN(band.avgY)) {
+        const avgLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        avgLabel.setAttribute('x', String(mid));
+        avgLabel.setAttribute('y', String(28));
+        avgLabel.setAttribute('text-anchor', 'middle');
+        avgLabel.setAttribute(
+          'class',
+          band.isForecast
+            ? 'price-chart__day-avg price-chart__day-avg--prognos'
+            : 'price-chart__day-avg',
+        );
+        avgLabel.textContent = `⌀ ${Math.round(band.avgY).toLocaleString('sv-SE')} öre`;
+        gDays.append(avgLabel);
+      }
+    });
     svg.append(gDays);
 
     const dividerT = data.prognosScrollT;

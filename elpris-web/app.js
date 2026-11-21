@@ -468,6 +468,29 @@
     }
   }
 
+  function enrichDayBoundsWithAverages(dayBounds, spot, forecastPts, view) {
+    const spotByKey = {
+      yesterday: view.yesterdaySpot,
+      today: view.todaySpot,
+      tomorrow: view.tomorrowSpot,
+    };
+    return dayBounds.map((band) => {
+      const pts = [...spot, ...forecastPts].filter(
+        (p) => p.day === band.iso || p.day === band.key,
+      );
+      let avgY = null;
+      if (pts.length) {
+        avgY = Math.round(average(pts.map((p) => p.y)));
+      } else if (spotByKey[band.key]?.avgOre != null) {
+        avgY = displayOre(spotByKey[band.key].avgOre);
+      } else {
+        const fc = view.forecastDaily?.get(band.iso);
+        if (fc?.avgOre != null) avgY = displayOre(fc.avgOre);
+      }
+      return { ...band, avgY };
+    });
+  }
+
   function buildChartDayBounds(todayIso) {
     const bounds = [
       {
@@ -584,7 +607,12 @@
     const { spot, forecast: forecastPts } =
       chartMode === 'dygnsmedel' ? buildDailyChartSeries(view) : buildDetailedChartSeries(view);
 
-    const dayBounds = buildChartDayBounds(todayIso);
+    const dayBounds = enrichDayBoundsWithAverages(
+      buildChartDayBounds(todayIso),
+      spot,
+      forecastPts,
+      view,
+    );
 
     if (!spot.length && !forecastPts.length) {
       chart.destroy(els.priceChart);
