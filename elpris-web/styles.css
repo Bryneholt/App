@@ -12,6 +12,9 @@
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --chart-spot: var(--accent);
   --chart-forecast: #a78bfa;
+  --chart-cheap: #34d399;
+  --chart-mid: #facc15;
+  --chart-hot: #f87171;
 }
 
 @media (prefers-color-scheme: light) {
@@ -26,6 +29,9 @@
     --btn-active: #e0f2f1;
     --forecast-bg: #f1f5f9;
     --chart-forecast: #7c3aed;
+    --chart-cheap: #10b981;
+    --chart-mid: #eab308;
+    --chart-hot: #ef4444;
   }
 }
 
@@ -316,6 +322,46 @@ body {
   color: var(--muted);
 }
 
+.chart-mode {
+  display: inline-flex;
+  margin-top: 0.65rem;
+  padding: 0.2rem;
+  gap: 0.15rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--border);
+  background: var(--btn-bg);
+}
+
+.chart-mode__btn {
+  flex: 1;
+  min-width: 6.5rem;
+  min-height: 2.25rem;
+  padding: 0.4rem 0.55rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.chart-mode__btn:hover {
+  color: var(--fg);
+}
+
+.chart-mode__btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.chart-mode__btn[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--btn-active);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
 .price-chart {
   min-height: 12rem;
   display: flex;
@@ -331,11 +377,31 @@ body {
   color: var(--muted);
 }
 
+.price-chart__scroll {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -0.35rem;
+  padding: 0 0.35rem 0.15rem;
+  scrollbar-width: thin;
+}
+
+.price-chart__scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 0.35rem;
+}
+
 .price-chart__svg {
   width: 100%;
   height: auto;
   display: block;
   overflow: visible;
+}
+
+.price-chart--wide .price-chart__svg {
+  width: auto;
+  min-width: 100%;
 }
 
 .price-chart__grid line {
@@ -371,19 +437,21 @@ body {
   opacity: 0.08;
 }
 
-.price-chart__line--spot {
-  stroke: var(--chart-spot);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
+.price-chart__band--forecast-day {
+  fill: color-mix(in srgb, var(--chart-forecast) 22%, transparent);
+  opacity: 0.35;
 }
 
-.price-chart__line--forecast {
-  stroke: var(--chart-forecast);
-  stroke-width: 2;
-  stroke-dasharray: 5 4;
-  stroke-linejoin: round;
-  stroke-linecap: round;
+.price-chart__day-label--prognos {
+  font-size: 8px;
+  fill: color-mix(in srgb, var(--chart-forecast) 70%, var(--muted));
+}
+
+.price-chart__mean-line {
+  stroke: var(--chart-mid);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.65;
 }
 
 .price-chart__legend {
@@ -419,6 +487,60 @@ body {
     transparent 4px 7px
   );
   height: 2px;
+}
+
+.price-chart__scale {
+  margin-top: 0.35rem;
+  text-align: center;
+}
+
+.price-chart__scale-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.price-chart__scale-bar {
+  height: 0.55rem;
+  border-radius: 0.35rem;
+  border: 1px solid var(--border);
+  background: linear-gradient(
+    90deg,
+    var(--chart-cheap) 0%,
+    var(--chart-mid) 50%,
+    var(--chart-hot) 100%
+  );
+}
+
+.price-chart__scale-labels {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  color: var(--muted);
+}
+
+.price-chart__scale-labels strong {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.price-chart__scale-note {
+  margin: 0.35rem 0 0;
+  font-size: 0.62rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.price-chart__legend--type {
+  margin-top: 0.15rem;
 }
 
 .forecast {

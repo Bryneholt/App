@@ -5,6 +5,7 @@
   const SPOT_API = 'https://www.elprisetjustnu.se/api/v1/prices';
   const FORECAST_API = 'https://elfacit.se/api/elpris-prognos';
   const STORAGE_KEY = 'elpris-zone';
+  const CHART_MODE_KEY = 'elpris-chart-mode';
   const DEFAULT_ZONE = 'SE3';
   const FORECAST_DAYS = 5;
   const TZ = 'Europe/Stockholm';
@@ -220,14 +221,38 @@
     priceUnits: document.querySelectorAll('.price-unit'),
     priceChart: el('price-chart'),
     chartSub: el('chart-sub'),
+    chartModeButtons: document.querySelectorAll('[data-chart-mode]'),
   };
 
   let loading = false;
   let activeZone = DEFAULT_ZONE;
   let includeFees = loadIncludeFeesPreference();
   let netProfileId = loadNetProfileId();
+  let chartMode = 'detaljerad';
   let cachedView = null;
   let initialLoadDone = false;
+
+  function loadChartMode() {
+    try {
+      const saved = localStorage.getItem(CHART_MODE_KEY);
+      if (saved === 'dygnsmedel' || saved === 'detaljerad') return saved;
+    } catch {
+      /* ignore */
+    }
+    return 'detaljerad';
+  }
+
+  function saveChartMode(mode) {
+    try {
+      localStorage.setItem(CHART_MODE_KEY, mode === 'dygnsmedel' ? 'dygnsmedel' : 'detaljerad');
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function middayMs(isoKey) {
+    return stockholmMidnightMs(isoKey) + 12 * 3600000;
+  }
 
   function readSavedZone() {
     try {
@@ -312,9 +337,72 @@
     }
   }
 
-  function renderPriceChart(view) {
-    if (!chart || !els.priceChart || !view) return;
+  function buildChartDayBounds(todayIso) {
+    const bounds = [
+      {
+        key: 'yesterday',
+        label: 'Igår',
+        iso: isoKeyOffsetDays(todayIso, -1),
+        isForecast: false,
+      },
+      {
+        key: 'today',
+        label: 'Idag',
+        iso: todayIso,
+        isForecast: false,
+      },
+      {
+        key: 'tomorrow',
+        label: 'Imorgon',
+        iso: isoKeyOffsetDays(todayIso, 1),
+        isForecast: false,
+      },
+    ];
+    for (let i = 0; i < FORECAST_DAYS; i++) {
+      const iso = isoKeyOffsetDays(todayIso, 2 + i);
+      bounds.push({
+        key: `prognos-${i}`,
+        label: shortDayLabel(iso),
+        iso,
+        isForecast: true,
+      });
+    }
+    return bounds.map((band) => ({
+      ...band,
+      t0: stockholmMidnightMs(band.iso),
+      t1: stockholmMidnightMs(band.iso) + DAY_MS,
+    }));
+  }
 
+  function buildDetailedChartSeries(view) {
+    const { yesterdaySpot, todaySpot, tomorrowSpot, todayIso, tomorrowIso, forecast } = view;
+
+    const spot = [];
+    appendSpotSeries(spot, 'yesterday', yesterdaySpot);
+    appendSpotSeries(spot, 'today', todaySpot);
+    appendSpotSeries(spot, 'tomorrow', tomorrowSpot);
+    spot.sort((a, b) => a.t - b.t);
+
+    const forecastDayIsos = new Set();
+    if (!tomorrowSpot?.series?.length) forecastDayIsos.add(tomorrowIso);
+    for (let i = 0; i < FORECAST_DAYS; i++) {
+      forecastDayIsos.add(isoKeyOffsetDays(todayIso, 2 + i));
+    }
+
+    const forecastPts = [];
+    for (const row of forecast?.hourly || []) {
+      if (!forecastDayIsos.has(row.iso)) continue;
+      forecastPts.push({
+        t: row.t,
+        y: displayOre(row.p50),
+        day: row.iso,
+      });
+    }
+    forecastPts.sort((a, b) => a.t - b.t);
+    return { spot, forecast: forecastPts };
+  }
+
+  function buildDailyChartSeries(view) {
     const {
       yesterdaySpot,
       todaySpot,
@@ -322,25 +410,50 @@
       todayIso,
       tomorrowIso,
       yesterdayIso,
-      forecast,
+      forecastDaily,
     } = view;
 
     const spot = [];
-    appendSpotSeries(spot, 'yesterday', yesterdaySpot);
-    appendSpotSeries(spot, 'today', todaySpot);
-    appendSpotSeries(spot, 'tomorrow', tomorrowSpot);
+    const pushSpotDay = (iso, data) => {
+      if (!data) return;
+      spot.push({ t: middayMs(iso), y: displayOre(data.avgOre), day: iso });
+    };
+    pushSpotDay(yesterdayIso, yesterdaySpot);
+    pushSpotDay(todayIso, todaySpot);
+    pushSpotDay(tomorrowIso, tomorrowSpot);
+    spot.sort((a, b) => a.t - b.t);
 
     const forecastPts = [];
-    if (!tomorrowSpot?.series?.length && forecast?.hourly) {
-      for (const row of forecast.hourly) {
-        if (row.iso !== tomorrowIso) continue;
-        forecastPts.push({
-          t: row.t,
-          y: displayOre(row.p50),
-          day: 'tomorrow',
-        });
+    if (!tomorrowSpot?.series?.length) {
+      const fcTomorrow = forecastDaily?.get(tomorrowIso);
+      if (fcTomorrow) {
+        forecastPts.push({ t: middayMs(tomorrowIso), y: displayOre(fcTomorrow.avgOre), day: tomorrowIso });
       }
     }
+    for (let i = 0; i < FORECAST_DAYS; i++) {
+      const iso = isoKeyOffsetDays(todayIso, 2 + i);
+      const fc = forecastDaily?.get(iso);
+      if (fc) forecastPts.push({ t: middayMs(iso), y: displayOre(fc.avgOre), day: iso });
+    }
+    forecastPts.sort((a, b) => a.t - b.t);
+    return { spot, forecast: forecastPts };
+  }
+
+  function updateChartModeUi() {
+    els.chartModeButtons?.forEach((btn) => {
+      const pressed = btn.dataset.chartMode === chartMode;
+      btn.setAttribute('aria-pressed', pressed ? 'true' : 'false');
+    });
+  }
+
+  function renderPriceChart(view) {
+    if (!chart || !els.priceChart || !view) return;
+
+    const { todayIso, tomorrowSpot } = view;
+    const { spot, forecast: forecastPts } =
+      chartMode === 'dygnsmedel' ? buildDailyChartSeries(view) : buildDetailedChartSeries(view);
+
+    const dayBounds = buildChartDayBounds(todayIso);
 
     if (!spot.length && !forecastPts.length) {
       chart.destroy(els.priceChart);
@@ -351,31 +464,31 @@
       return;
     }
 
-    const dayBounds = [
-      { key: 'yesterday', t0: stockholmMidnightMs(yesterdayIso), t1: stockholmMidnightMs(yesterdayIso) + DAY_MS },
-      { key: 'today', t0: stockholmMidnightMs(todayIso), t1: stockholmMidnightMs(todayIso) + DAY_MS },
-      { key: 'tomorrow', t0: stockholmMidnightMs(tomorrowIso), t1: stockholmMidnightMs(tomorrowIso) + DAY_MS },
-    ];
-
     chart.render(els.priceChart, {
       spot,
       forecast: forecastPts,
       tMin: dayBounds[0].t0,
-      tMax: dayBounds[2].t1,
+      tMax: dayBounds[dayBounds.length - 1].t1,
       dayBounds,
+      mode: chartMode === 'dygnsmedel' ? 'daily' : 'detailed',
       unitLabel: includeFees ? 'öre per kilowattimme inklusive' : 'öre per kilowattimme spot',
     });
 
     if (els.chartSub) {
       const parts = [];
-      parts.push(yesterdaySpot ? 'igår spot' : 'igår ej tillgänglig');
-      parts.push('idag spot');
-      if (tomorrowSpot) parts.push('imorgon spot');
-      else if (forecastPts.length) parts.push('imorgon prognos');
-      else parts.push('imorgon väntar på spot');
+      if (chartMode === 'dygnsmedel') {
+        parts.push('dygnsmedel: spot-medel igår–imorgon');
+        parts.push(`prognos p50-medel · ${FORECAST_DAYS} dagar efter imorgon`);
+      } else {
+        parts.push('kvarts-/timdata igår–imorgon (spot)');
+        if (!tomorrowSpot?.series?.length) parts.push('imorgon: prognos om spot saknas');
+        parts.push(`${FORECAST_DAYS} prognosdagar timvis (streckad)`);
+        parts.push('svep horisontellt vid behov');
+      }
       parts.push(includeFees ? 'värden inkl. avgifter' : 'rena spotvärden');
       els.chartSub.textContent = parts.join(' · ');
     }
+    updateChartModeUi();
   }
 
   function renderToday(data) {
@@ -615,6 +728,17 @@
       });
     });
 
+    els.chartModeButtons?.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const mode = btn.dataset.chartMode;
+        if (!mode || mode === chartMode) return;
+        chartMode = mode === 'dygnsmedel' ? 'dygnsmedel' : 'detaljerad';
+        saveChartMode(chartMode);
+        updateChartModeUi();
+        if (cachedView) renderPriceChart(cachedView);
+      });
+    });
+
     if (els.netProfileSelect) {
       for (const id of Object.keys(NET_PROFILES)) {
         const opt = document.createElement('option');
@@ -629,9 +753,11 @@
   function start() {
     includeFees = loadIncludeFeesPreference();
     netProfileId = loadNetProfileId();
+    chartMode = loadChartMode();
     if (els.includeFeesSwitch) els.includeFeesSwitch.checked = includeFees;
     bindUi();
     updatePriceModeUi();
+    updateChartModeUi();
 
     const initialZone = readSavedZone();
     loadZone(initialZone, {
