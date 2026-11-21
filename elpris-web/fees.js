@@ -1,6 +1,7 @@
 /**
- * Uppskattad marginal konsumentkostnad per kWh (öre/kWh inkl. moms).
+ * Uppskattad marginal variabel konsumentkostnad per kWh (öre/kWh inkl. moms).
  * Spot/p50 är ex moms/skatt/nät (som elprisetjustnu/Elfacit).
+ * Fasta månadsavgifter (nät/handlare) ingår inte.
  *
  * Källor: SCB TAB3950 elnätspris lägenhet, Skatteverket energiskatt,
  * typiska elcertifikat-/handelspåslag — se docs/elpris-design.md.
@@ -34,9 +35,6 @@
   const CERTIFICATE_ORE_EX = 2.5;
   const RETAIL_VARIABLE_ORE_EX = 6;
 
-  const ASSUMED_KWH_PER_YEAR = 3000;
-  const FIXED_MONTHLY_INKL_KR = { grid: 110, retail: 60 };
-
   const NET_PROFILES = {
     lagenhet: {
       id: 'lagenhet',
@@ -50,19 +48,13 @@
     },
   };
 
-  function fixedOreInklPerKwh() {
-    const annual = (FIXED_MONTHLY_INKL_KR.grid + FIXED_MONTHLY_INKL_KR.retail) * 12;
-    return Math.round((annual / ASSUMED_KWH_PER_YEAR) * 100);
-  }
-
   function consumerTotalOre(spotOreEx, zone, profileId = 'lagenhet') {
     const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
     const gridEx = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const taxEx = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
     const variableEx =
       Number(spotOreEx) + gridEx + taxEx + CERTIFICATE_ORE_EX + RETAIL_VARIABLE_ORE_EX;
-    const variableInkl = variableEx * VAT;
-    return Math.round(variableInkl + fixedOreInklPerKwh());
+    return Math.round(variableEx * VAT);
   }
 
   function consumerTotalFromForecastBand(pOreEx, zone, profileId) {
@@ -73,11 +65,10 @@
     const profile = NET_PROFILES[profileId] ?? NET_PROFILES.lagenhet;
     const grid = profile.gridByZone[zone] ?? ZONE_GRID_ORE_EX.SE3;
     const tax = ZONE_ENERGY_TAX_ORE_EX[zone] ?? 36;
-    const fixed = fixedOreInklPerKwh();
     return (
       `Spot + nät ~${grid} + skatt ${tax} + cert/handels-påslag öre/kWh (ex moms), ` +
-      `× moms 25 % + fasta avg. ~${fixed} öre/kWh (vid ${ASSUMED_KWH_PER_YEAR} kWh/år). ` +
-      `Nätsiffran är zonmedel, inte din adress.`
+      '× moms 25 %. Endast variabla delar — fasta månadsavgifter ingår inte. ' +
+      'Nätsiffran är zonmedel, inte din adress.'
     );
   }
 
